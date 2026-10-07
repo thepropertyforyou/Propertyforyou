@@ -1,0 +1,16 @@
+project_id = "cdytokrrxcgxoloirdkk"
+
+[functions.send-otp]
+verify_jwt = false
+
+[functions.verify-otp]
+verify_jwt = false
+
+[functions.send-invoice]
+verify_jwt = false
+
+[auth]
+enable_signup = true
+
+[auth.email]
+enable_confirmations = false
