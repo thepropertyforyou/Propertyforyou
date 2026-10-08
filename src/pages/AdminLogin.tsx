@@ -21,7 +21,7 @@ const AdminLogin = () => {
     const trimmedEmail = email.trim();
     const trimmedPassword = password.trim();
 
-    if (trimmedEmail.toLowerCase() !== "thepropertyforyou2@gmail.com") {
+    if (trimmedEmail.toLowerCase() !== "thepropertyforyou7@gmail.com") {
       toast({
         title: "Access Denied",
         description: "Only the designated admin email is allowed to access this portal.",
@@ -98,7 +98,7 @@ const AdminLogin = () => {
       return;
     }
 
-    if (trimmedEmail.toLowerCase() !== "thepropertyforyou2@gmail.com") {
+    if (trimmedEmail.toLowerCase() !== "thepropertyforyou7@gmail.com") {
       toast({
         title: "Access Denied",
         description: "Only the designated admin email is allowed to reset the password.",
@@ -141,7 +141,7 @@ const AdminLogin = () => {
           </div>
           <CardTitle className="text-2xl text-center">Admin Login</CardTitle>
           <CardDescription className="text-center">
-            Admin Email: thepropertyforyou2@gmail.com
+            Admin Email: thepropertyforyou7@gmail.com
             <br />
             <span className="text-xs text-muted-foreground mt-1">
               First time? Sign up at /auth, then login here with admin credentials

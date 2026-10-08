@@ -6,7 +6,7 @@ BEGIN
   -- Get user_id from profiles table for the admin email
   SELECT user_id INTO admin_user_id
   FROM public.profiles
-  WHERE email = 'thepropertyforyou2@gmail.com'
+  WHERE email = 'thepropertyforyou7@gmail.com'
   LIMIT 1;
   
   -- If user exists, ensure they have admin role

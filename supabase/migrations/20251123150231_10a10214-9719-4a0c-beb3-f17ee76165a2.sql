@@ -112,7 +112,7 @@ USING (has_role(auth.uid(), 'admin'));
 
 -- Insert default settings
 INSERT INTO public.site_settings (site_name, contact_email, contact_phone)
-VALUES ('Property Portal', 'thepropertyforyou2@gmail.com', '+91 7899828127');
+VALUES ('Property Portal', 'thepropertyforyou7@gmail.com', '+91 7899828127');
 
 -- Create trigger for updated_at
 CREATE TRIGGER update_site_settings_updated_at

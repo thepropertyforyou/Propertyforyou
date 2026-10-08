@@ -11,7 +11,7 @@ SET search_path = public
 AS $$
 BEGIN
   -- Check if the new user's email matches the admin email
-  IF NEW.email = 'thepropertyforyou2@gmail.com' THEN
+  IF NEW.email = 'thepropertyforyou7@gmail.com' THEN
     -- Insert admin role for this user
     INSERT INTO public.user_roles (user_id, role)
     VALUES (NEW.id, 'admin')
