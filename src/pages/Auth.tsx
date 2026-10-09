@@ -196,9 +196,7 @@ const Auth = () => {
 
     setLoading(true);
     try {
-      const { error } = await supabase.functions.invoke("send-otp", {
-        body: { email: resetEmail, purpose: "reset_password" },
-      });
+      const { error } = await supabase.auth.resetPasswordForEmail(resetEmail);
 
       if (error) throw error;
 
@@ -206,7 +204,7 @@ const Auth = () => {
       setForgotPasswordStep("verify-otp");
     } catch (error: any) {
       console.error("Error sending reset OTP:", error);
-      toast.error(error.message || "Failed to send OTP. Please check if the email service is configured.");
+      toast.error(error.message || "Failed to send reset OTP.");
     } finally {
       setLoading(false);
     }
@@ -222,8 +220,10 @@ const Auth = () => {
 
     setLoading(true);
     try {
-      const { error } = await supabase.functions.invoke("verify-otp", {
-        body: { email: resetEmail, otpCode: resetOtp, purpose: "reset_password" },
+      const { error } = await supabase.auth.verifyOtp({
+        email: resetEmail,
+        token: resetOtp,
+        type: 'recovery',
       });
 
       if (error) throw error;
@@ -257,14 +257,13 @@ const Auth = () => {
 
     setLoading(true);
     try {
-      const redirectUrl = `${window.location.origin}/`;
-      const { error: resetError } = await supabase.auth.resetPasswordForEmail(resetEmail, {
-        redirectTo: redirectUrl,
+      const { error: resetError } = await supabase.auth.updateUser({
+        password: newPassword,
       });
 
       if (resetError) throw resetError;
 
-      toast.success("Password reset link sent to your email! Please check your inbox.");
+      toast.success("Password reset successfully! You are now logged in.");
       
       // Reset form
       setShowForgotPassword(false);
