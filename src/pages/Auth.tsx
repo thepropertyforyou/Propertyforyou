@@ -226,7 +226,6 @@ const Auth = () => {
                         Forgot Password?
                       </button>
                     </form>
-                    </form>
               ) : (
                 <div className="space-y-4">
                   <button
