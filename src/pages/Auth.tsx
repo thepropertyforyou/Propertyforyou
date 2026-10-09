@@ -5,24 +5,35 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { toast } from "sonner";
 import Header from "@/components/Header";
 import Footer from "@/components/Footer";
 
+type SignupStep = "form" | "verify-otp";
 type ForgotPasswordStep = "email" | "verify-otp" | "new-password";
 
 const Auth = () => {
   const navigate = useNavigate();
   const [loading, setLoading] = useState(false);
   
-  // Get redirect path from URL params or default to admin dashboard
+  // Get redirect path from URL params or default to home
   const searchParams = new URLSearchParams(window.location.search);
-  const redirectTo = searchParams.get('redirect') || '/admin/dashboard';
+  const redirectTo = searchParams.get('redirect') || '/';
 
   // Login form state
   const [loginEmail, setLoginEmail] = useState("");
   const [loginPassword, setLoginPassword] = useState("");
   const [showForgotPassword, setShowForgotPassword] = useState(false);
+
+  // Signup form state
+  const [signupStep, setSignupStep] = useState<SignupStep>("form");
+  const [signupName, setSignupName] = useState("");
+  const [signupEmail, setSignupEmail] = useState("");
+  const [signupPhone, setSignupPhone] = useState("");
+  const [signupPassword, setSignupPassword] = useState("");
+  const [signupConfirmPassword, setSignupConfirmPassword] = useState("");
+  const [signupOtp, setSignupOtp] = useState("");
 
   // Forgot password state
   const [forgotPasswordStep, setForgotPasswordStep] = useState<ForgotPasswordStep>("email");
@@ -41,7 +52,7 @@ const Auth = () => {
 
     setLoading(true);
     try {
-      const { data: authData, error } = await supabase.auth.signInWithPassword({
+      const { error } = await supabase.auth.signInWithPassword({
         email: loginEmail,
         password: loginPassword,
       });
@@ -53,25 +64,6 @@ const Auth = () => {
         throw error;
       }
 
-      if (!authData.user) {
-        throw new Error("No user data returned");
-      }
-
-      // Check if user has admin role
-      const { data: hasAdminRole, error: roleError } = await supabase
-        .rpc("has_role", {
-          _user_id: authData.user.id,
-          _role: "admin"
-        });
-
-      if (roleError) throw roleError;
-
-      if (!hasAdminRole) {
-        await supabase.auth.signOut();
-        toast.error("Access Denied: You are not authorized to access the admin portal.");
-        return;
-      }
-
       toast.success("Successfully logged in!");
       navigate(redirectTo);
     } catch (error: any) {
@@ -81,7 +73,100 @@ const Auth = () => {
     }
   };
 
+  const handleSignup = async (e: React.FormEvent) => {
+    e.preventDefault();
 
+    if (!signupName || !signupEmail || !signupPhone || !signupPassword) {
+      toast.error("Please fill in all fields");
+      return;
+    }
+
+    if (signupPassword !== signupConfirmPassword) {
+      toast.error("Passwords do not match");
+      return;
+    }
+
+    if (signupPassword.length < 6) {
+      toast.error("Password must be at least 6 characters");
+      return;
+    }
+
+    const phoneRegex = /^[0-9]{10}$/;
+    if (!phoneRegex.test(signupPhone.replace(/\s/g, ""))) {
+      toast.error("Please enter a valid 10-digit phone number");
+      return;
+    }
+
+    setLoading(true);
+    try {
+      const redirectUrl = `${window.location.origin}/`;
+      const { error } = await supabase.auth.signUp({
+        email: signupEmail,
+        password: signupPassword,
+        options: {
+          emailRedirectTo: redirectUrl,
+          data: {
+            name: signupName,
+            phone: signupPhone,
+          },
+        },
+      });
+
+      if (error) {
+        if (error.message.includes("already registered") || error.message.includes("User already registered")) {
+          toast.error("Account already exists. Please log in instead.");
+          setSignupStep("form");
+          return;
+        }
+        throw error;
+      }
+
+      toast.success("OTP sent to your email! Please check your inbox.");
+      setSignupStep("verify-otp");
+    } catch (error: any) {
+      console.error("Error during signup:", error);
+      toast.error(error.message || "Failed to sign up.");
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleVerifySignupOtp = async (e: React.FormEvent) => {
+    e.preventDefault();
+
+    if (!signupOtp || signupOtp.length !== 6) {
+      toast.error("Please enter a valid 6-digit OTP");
+      return;
+    }
+
+    setLoading(true);
+    try {
+      const { error: verifyError } = await supabase.auth.verifyOtp({
+        email: signupEmail,
+        token: signupOtp,
+        type: 'signup',
+      });
+
+      if (verifyError) throw verifyError;
+
+      toast.success("Account verified successfully! You can now login.");
+      
+      // Reset form
+      setSignupStep("form");
+      setSignupName("");
+      setSignupEmail("");
+      setSignupPhone("");
+      setSignupPassword("");
+      setSignupConfirmPassword("");
+      setSignupOtp("");
+      
+      // We keep user on the auth page so they can login.
+    } catch (error: any) {
+      toast.error(error.message || "Failed to verify OTP");
+    } finally {
+      setLoading(false);
+    }
+  };
 
   const handleSendResetOtp = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -185,11 +270,18 @@ const Auth = () => {
         <div className="max-w-md mx-auto">
           <Card>
             <CardHeader className="text-center">
-              <CardTitle className="text-2xl font-bold">Admin Login</CardTitle>
-              <CardDescription>Login to access the admin portal</CardDescription>
+              <CardTitle className="text-2xl font-bold">Welcome to ThePropertyForYou</CardTitle>
+              <CardDescription>Login or create an account to post ads</CardDescription>
             </CardHeader>
             <CardContent>
               {!showForgotPassword ? (
+                <Tabs defaultValue="login" className="w-full">
+                  <TabsList className="grid w-full grid-cols-2">
+                    <TabsTrigger value="login">Login</TabsTrigger>
+                    <TabsTrigger value="signup">Signup</TabsTrigger>
+                  </TabsList>
+
+                  <TabsContent value="login">
                     <form onSubmit={handleLogin} className="space-y-4">
                       <div className="space-y-2">
                         <Label htmlFor="login-email">Email</Label>
@@ -226,6 +318,108 @@ const Auth = () => {
                         Forgot Password?
                       </button>
                     </form>
+                  </TabsContent>
+
+                  <TabsContent value="signup">
+                    {signupStep === "form" ? (
+                      <form onSubmit={handleSignup} className="space-y-4">
+                        <div className="space-y-2">
+                          <Label htmlFor="signup-name">Full Name</Label>
+                          <Input
+                            id="signup-name"
+                            type="text"
+                            placeholder="John Doe"
+                            value={signupName}
+                            onChange={(e) => setSignupName(e.target.value)}
+                            disabled={loading}
+                            required
+                          />
+                        </div>
+                        <div className="space-y-2">
+                          <Label htmlFor="signup-email">Email</Label>
+                          <Input
+                            id="signup-email"
+                            type="email"
+                            placeholder="your@email.com"
+                            value={signupEmail}
+                            onChange={(e) => setSignupEmail(e.target.value)}
+                            disabled={loading}
+                            required
+                          />
+                        </div>
+                        <div className="space-y-2">
+                          <Label htmlFor="signup-phone">Phone Number</Label>
+                          <Input
+                            id="signup-phone"
+                            type="tel"
+                            placeholder="9876543210"
+                            value={signupPhone}
+                            onChange={(e) => setSignupPhone(e.target.value)}
+                            disabled={loading}
+                            required
+                          />
+                        </div>
+                        <div className="space-y-2">
+                          <Label htmlFor="signup-password">Password</Label>
+                          <Input
+                            id="signup-password"
+                            type="password"
+                            placeholder="••••••••"
+                            value={signupPassword}
+                            onChange={(e) => setSignupPassword(e.target.value)}
+                            disabled={loading}
+                            required
+                          />
+                        </div>
+                        <div className="space-y-2">
+                          <Label htmlFor="signup-confirm-password">Confirm Password</Label>
+                          <Input
+                            id="signup-confirm-password"
+                            type="password"
+                            placeholder="••••••••"
+                            value={signupConfirmPassword}
+                            onChange={(e) => setSignupConfirmPassword(e.target.value)}
+                            disabled={loading}
+                            required
+                          />
+                        </div>
+                        <Button type="submit" className="w-full" disabled={loading}>
+                          {loading ? "Sending OTP..." : "Sign Up"}
+                        </Button>
+                      </form>
+                    ) : (
+                      <form onSubmit={handleVerifySignupOtp} className="space-y-4">
+                        <div className="space-y-2">
+                          <Label htmlFor="signup-otp">Enter OTP</Label>
+                          <Input
+                            id="signup-otp"
+                            type="text"
+                            placeholder="Enter 6-digit OTP"
+                            value={signupOtp}
+                            onChange={(e) => setSignupOtp(e.target.value)}
+                            disabled={loading}
+                            maxLength={6}
+                            required
+                          />
+                          <p className="text-sm text-muted-foreground">
+                            We've sent a 6-digit code to {signupEmail}
+                          </p>
+                        </div>
+                        <Button type="submit" className="w-full" disabled={loading}>
+                          {loading ? "Verifying..." : "Verify & Create Account"}
+                        </Button>
+                        <button
+                          type="button"
+                          onClick={() => setSignupStep("form")}
+                          className="w-full text-sm text-muted-foreground hover:text-foreground"
+                          disabled={loading}
+                        >
+                          Back to form
+                        </button>
+                      </form>
+                    )}
+                  </TabsContent>
+                </Tabs>
               ) : (
                 <div className="space-y-4">
                   <button
