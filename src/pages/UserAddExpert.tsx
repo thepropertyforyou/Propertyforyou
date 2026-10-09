@@ -138,7 +138,7 @@ const UserAddExpert = () => {
           <p className="text-muted-foreground mb-6">
             You need to be logged in to submit an expert profile.
           </p>
-          <Button onClick={() => navigate("/auth")}>Login / Sign Up</Button>
+          <Button onClick={() => navigate("/auth")}>Login</Button>
         </div>
         <Footer />
       </div>

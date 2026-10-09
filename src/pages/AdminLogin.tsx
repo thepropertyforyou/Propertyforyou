@@ -142,10 +142,6 @@ const AdminLogin = () => {
           <CardTitle className="text-2xl text-center">Admin Login</CardTitle>
           <CardDescription className="text-center">
             Admin Email: thepropertyforyou7@gmail.com
-            <br />
-            <span className="text-xs text-muted-foreground mt-1">
-              First time? Sign up at /auth, then login here with admin credentials
-            </span>
           </CardDescription>
         </CardHeader>
         <CardContent>
