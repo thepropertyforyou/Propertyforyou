@@ -48,7 +48,7 @@ const Banners = () => {
 
   return (
     <section className="py-8">
-      <div className="w-full max-w-[1200px] mx-auto">
+      <div className="w-full">
         <Carousel
           opts={{
             loop: banners.length > 1,
