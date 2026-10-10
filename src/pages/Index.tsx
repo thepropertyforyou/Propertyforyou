@@ -3,6 +3,7 @@ import Hero from "@/components/Hero";
 import Metrics from "@/components/Metrics";
 import SponsoredAdsCarousel from "@/components/SponsoredAdsCarousel";
 import FeaturedListings from "@/components/FeaturedListings";
+import Banners from "@/components/Banners";
 import WhyChooseUs from "@/components/WhyChooseUs";
 import Footer from "@/components/Footer";
 import FeaturedPopupAds from "@/components/FeaturedPopupAds";
@@ -18,6 +19,7 @@ const Index = () => {
         <Metrics />
         <SponsoredAdsCarousel />
         <FeaturedListings />
+        <Banners />
         <WhyChooseUs />
       </main>
       <Footer />

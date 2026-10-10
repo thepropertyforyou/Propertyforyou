@@ -12,7 +12,8 @@ import {
   GraduationCap,
   DollarSign,
   HelpCircle,
-  Receipt
+  Receipt,
+  Image
 } from "lucide-react";
 import { useNavigate, useLocation } from "react-router-dom";
 import { Button } from "@/components/ui/button";
@@ -24,6 +25,7 @@ const menuItems = [
   { icon: FileText, label: "Listings", path: "/admin/listings" },
   { icon: Star, label: "Featured", path: "/admin/featured" },
   { icon: Sparkles, label: "Popup Ads", path: "/admin/popup-ads" },
+  { icon: Image, label: "Banners", path: "/admin/banners" },
   { icon: Megaphone, label: "Sponsorships", path: "/admin/sponsorships" },
   { icon: GraduationCap, label: "Experts", path: "/admin/experts" },
   { icon: HelpCircle, label: "Expert Enquiries", path: "/admin/expert-enquiries" },

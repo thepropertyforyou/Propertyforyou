@@ -7,7 +7,7 @@ import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { useToast } from "@/hooks/use-toast";
-import { Plus, Calendar, CheckCircle, XCircle, Eye, DollarSign, Loader2 } from "lucide-react";
+import { Plus, Calendar, CheckCircle, XCircle, Eye, DollarSign, Loader2, Pencil, Trash2 } from "lucide-react";
 import { useAuth } from "@/hooks/useAuth";
 import AdminLayout from "@/components/admin/AdminLayout";
 import ImageUpload from "@/components/admin/ImageUpload";
@@ -62,6 +62,16 @@ const AdminPopupAds = () => {
     scheduleId: null,
   });
   const [paymentAmount, setPaymentAmount] = useState("");
+
+  const [editAd, setEditAd] = useState({
+    id: "",
+    listingId: "",
+    date: "",
+    slot: "1",
+    amount: "499"
+  });
+  const [isEditDialogOpen, setIsEditDialogOpen] = useState(false);
+  const [isDeleting, setIsDeleting] = useState<string | null>(null);
 
   useEffect(() => {
     if (!authLoading) {
@@ -274,6 +284,20 @@ const AdminPopupAds = () => {
 
     setIsCreating(true);
     try {
+      // Check for double booking
+      const { data: existingSlots, error: checkError } = await supabase
+        .from('popup_ad_schedules')
+        .select('id')
+        .eq('schedule_date', newAd.date)
+        .eq('slot_number', parseInt(newAd.slot));
+        
+      if (checkError) throw checkError;
+      
+      if (existingSlots && existingSlots.length > 0) {
+        toast({ title: "Error", description: "This slot is already booked for the selected date", variant: "destructive" });
+        setIsCreating(false);
+        return;
+      }
       const { error } = await supabase
         .from('popup_ad_schedules')
         .insert({
@@ -294,6 +318,61 @@ const AdminPopupAds = () => {
       toast({ title: "Error", description: error.message || "Failed to create ad", variant: "destructive" });
     } finally {
       setIsCreating(false);
+    }
+  };
+
+  const handleDeleteAd = async (id: string) => {
+    if (!window.confirm("Are you sure you want to delete this popup ad?")) return;
+    
+    setIsDeleting(id);
+    try {
+      const { error } = await supabase.from('popup_ad_schedules').delete().eq('id', id);
+      if (error) throw error;
+      toast({ title: "Success", description: "Popup ad deleted successfully" });
+      fetchSchedules();
+    } catch (error: any) {
+      toast({ title: "Error", description: error.message || "Failed to delete ad", variant: "destructive" });
+    } finally {
+      setIsDeleting(null);
+    }
+  };
+
+  const handleEditAdSubmit = async () => {
+    if (!editAd.listingId || !editAd.date) {
+      toast({ title: "Error", description: "Please fill all required fields", variant: "destructive" });
+      return;
+    }
+
+    try {
+      const { data: existingSlots, error: checkError } = await supabase
+        .from('popup_ad_schedules')
+        .select('id')
+        .eq('schedule_date', editAd.date)
+        .eq('slot_number', parseInt(editAd.slot))
+        .neq('id', editAd.id);
+        
+      if (checkError) throw checkError;
+      
+      if (existingSlots && existingSlots.length > 0) {
+        toast({ title: "Error", description: "This slot is already booked for the selected date", variant: "destructive" });
+        return;
+      }
+
+      const { error } = await supabase
+        .from('popup_ad_schedules')
+        .update({
+          listing_id: editAd.listingId,
+          schedule_date: editAd.date,
+          slot_number: parseInt(editAd.slot)
+        })
+        .eq('id', editAd.id);
+
+      if (error) throw error;
+      toast({ title: "Success", description: "Popup ad updated successfully" });
+      setIsEditDialogOpen(false);
+      fetchSchedules();
+    } catch (error: any) {
+      toast({ title: "Error", description: error.message || "Failed to update ad", variant: "destructive" });
     }
   };
 
@@ -373,13 +452,7 @@ const AdminPopupAds = () => {
                     </Select>
                   </div>
                 </div>
-                <div className="space-y-2">
-                   <ImageUpload 
-                      bucket="popup-ads"
-                      onUploadComplete={(url) => setNewAd({...newAd, proof: url})}
-                      label="Payment Proof (Optional)"
-                   />
-                </div>
+
               </div>
               <DialogFooter>
                 <Button onClick={handleCreateAd} disabled={isCreating}>
@@ -467,6 +540,30 @@ const AdminPopupAds = () => {
                         >
                           <Eye className="h-4 w-4" />
                         </Button>
+                        <Button
+                          size="sm"
+                          variant="outline"
+                          onClick={() => {
+                            setEditAd({
+                              id: schedule.id,
+                              listingId: schedule.listings.id,
+                              date: schedule.schedule_date,
+                              slot: schedule.slot_number.toString(),
+                              amount: schedule.payment_amount.toString()
+                            });
+                            setIsEditDialogOpen(true);
+                          }}
+                        >
+                          <Pencil className="h-4 w-4" />
+                        </Button>
+                        <Button
+                          size="sm"
+                          variant="destructive"
+                          onClick={() => handleDeleteAd(schedule.id)}
+                          disabled={isDeleting === schedule.id}
+                        >
+                          {isDeleting === schedule.id ? <Loader2 className="h-4 w-4 animate-spin" /> : <Trash2 className="h-4 w-4" />}
+                        </Button>
                         {schedule.payment_status === "pending" && (
                           <Button
                             size="sm"
@@ -540,6 +637,50 @@ const AdminPopupAds = () => {
               <CheckCircle className="h-4 w-4 mr-2" />
               Approve & Activate
             </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Edit Dialog */}
+      <Dialog open={isEditDialogOpen} onOpenChange={setIsEditDialogOpen}>
+        <DialogContent className="sm:max-w-[500px]">
+          <DialogHeader>
+            <DialogTitle>Edit Popup Ad Schedule</DialogTitle>
+            <DialogDescription>Modify the details for this scheduled ad.</DialogDescription>
+          </DialogHeader>
+          <div className="space-y-4 py-4">
+            <div className="space-y-2">
+              <Label>Select Listing *</Label>
+              <Select value={editAd.listingId} onValueChange={(val) => setEditAd({...editAd, listingId: val})}>
+                <SelectTrigger>
+                  <SelectValue placeholder="Search listing..." />
+                </SelectTrigger>
+                <SelectContent>
+                  {allListings.map(l => <SelectItem key={l.id} value={l.id}>{l.title}</SelectItem>)}
+                </SelectContent>
+              </Select>
+            </div>
+            <div className="grid grid-cols-2 gap-4">
+              <div className="space-y-2">
+                <Label>Schedule Date *</Label>
+                <Input type="date" value={editAd.date} onChange={(e) => setEditAd({...editAd, date: e.target.value})} />
+              </div>
+              <div className="space-y-2">
+                <Label>Slot (1-3) *</Label>
+                <Select value={editAd.slot} onValueChange={(val) => setEditAd({...editAd, slot: val})}>
+                  <SelectTrigger><SelectValue /></SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="1">Slot 1</SelectItem>
+                    <SelectItem value="2">Slot 2</SelectItem>
+                    <SelectItem value="3">Slot 3</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+            </div>
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setIsEditDialogOpen(false)}>Cancel</Button>
+            <Button onClick={handleEditAdSubmit}>Save Changes</Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>

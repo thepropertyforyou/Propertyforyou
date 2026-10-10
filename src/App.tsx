@@ -35,6 +35,7 @@ import AdminNews from "./pages/AdminNews";
 import AdminMessages from "./pages/AdminMessages";
 import AdminSettings from "./pages/AdminSettings";
 import AdminInvoices from "./pages/AdminInvoices";
+import AdminBanners from "./pages/AdminBanners";
 import AdminAddListing from "./pages/AdminAddListing";
 import AdminEditListing from "./pages/AdminEditListing";
 import NotFound from "./pages/NotFound";
@@ -81,6 +82,7 @@ const App = () => (
           <Route path="/admin/expert-enquiries" element={<AdminExpertEnquiries />} />
           <Route path="/admin/settings" element={<AdminSettings />} />
           <Route path="/admin/invoices" element={<AdminInvoices />} />
+          <Route path="/admin/banners" element={<AdminBanners />} />
           <Route path="/listing/:id" element={<ListingDetail />} />
           <Route path="/edit-listing/:id" element={<EditListing />} />
           {/* ADD ALL CUSTOM ROUTES ABOVE THE CATCH-ALL "*" ROUTE */}
