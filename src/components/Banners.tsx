@@ -47,15 +47,15 @@ const Banners = () => {
   if (loading || banners.length === 0) return null;
 
   return (
-    <section className="py-12 bg-muted/30">
-      <div className="container mx-auto px-4 sm:px-6 lg:px-8">
+    <section className="py-8">
+      <div className="w-full max-w-[1200px] mx-auto">
         <Carousel
           opts={{
             loop: banners.length > 1,
             align: "start",
           }}
           plugins={banners.length > 1 ? [autoplay.current] : []}
-          className="w-full mx-auto"
+          className="w-full"
         >
           <CarouselContent>
             {banners.map((banner) => (
@@ -64,7 +64,7 @@ const Banners = () => {
                   href={banner.link_url || "#"} 
                   target={banner.link_url ? "_blank" : "_self"} 
                   rel="noopener noreferrer"
-                  className="block w-full h-[200px] md:h-[400px] overflow-hidden rounded-xl group relative"
+                  className="block w-full h-[150px] md:h-[300px] overflow-hidden group relative"
                 >
                   <img
                     src={banner.image_url}
