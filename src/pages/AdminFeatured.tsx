@@ -32,6 +32,7 @@ interface FeaturedRequest {
   created_at: string;
   user_id: string;
   seller_phone: string;
+  attributes?: any;
   profiles: { name: string; email: string };
 }
 
@@ -107,6 +108,7 @@ const AdminFeatured = () => {
           created_at,
           user_id,
           seller_phone,
+          attributes,
           profiles(name, email)
         `)
         .order("created_at", { ascending: false });
@@ -388,7 +390,17 @@ const AdminFeatured = () => {
                       <Badge variant={request.status === "active" ? "default" : request.status === "rejected" ? "destructive" : "secondary"}>
                         {request.status}
                       </Badge>
+                      {request.attributes?.plan_name && (
+                        <Badge variant="outline" className="border-yellow-500 text-yellow-600 bg-yellow-50/50 dark:bg-yellow-950/50">
+                          {request.attributes.plan_name} • {request.attributes.plan_duration} Days • ₹{request.attributes.plan_price}
+                        </Badge>
+                      )}
                     </div>
+                    {request.attributes?.start_date && (
+                      <p className="text-xs font-medium text-yellow-700 dark:text-yellow-400 mb-1">
+                        Requested Start Date: {new Date(request.attributes.start_date).toLocaleDateString()}
+                      </p>
+                    )}
                     <p className="text-sm text-muted-foreground">
                       ₹{request.price.toLocaleString()} • By {request.profiles.name} ({request.profiles.email})
                     </p>

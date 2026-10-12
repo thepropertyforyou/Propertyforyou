@@ -6,9 +6,10 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { toast } from "sonner";
-import { Save, Plus, Trash2 } from "lucide-react";
+import { Save, Plus, Trash2, Star, Sparkles, Loader2 } from "lucide-react";
 import { useAuth } from "@/hooks/useAuth";
 import AdminLayout from "@/components/admin/AdminLayout";
+import { Badge } from "@/components/ui/badge";
 import {
   Table,
   TableBody,
@@ -25,6 +26,15 @@ import {
   DialogTitle,
   DialogFooter,
 } from "@/components/ui/dialog";
+
+export interface AdPlan {
+  id?: string;
+  ad_type: "featured" | "popup";
+  plan_tier: number;
+  name: string;
+  duration_days: number;
+  price: number;
+}
 
 interface PricingPlan {
   id: string;
@@ -51,6 +61,19 @@ const AdminPricingManagement = () => {
     display_price: "",
   });
 
+  // Dedicated 3 plans for Featured and Popup ads
+  const [featuredPlans, setFeaturedPlans] = useState<AdPlan[]>([
+    { ad_type: "featured", plan_tier: 1, name: "Plan 1", duration_days: 7, price: 199 },
+    { ad_type: "featured", plan_tier: 2, name: "Plan 2", duration_days: 15, price: 349 },
+    { ad_type: "featured", plan_tier: 3, name: "Plan 3", duration_days: 30, price: 499 },
+  ]);
+  const [popupPlans, setPopupPlans] = useState<AdPlan[]>([
+    { ad_type: "popup", plan_tier: 1, name: "Plan 1", duration_days: 1, price: 199 },
+    { ad_type: "popup", plan_tier: 2, name: "Plan 2", duration_days: 3, price: 499 },
+    { ad_type: "popup", plan_tier: 3, name: "Plan 3", duration_days: 7, price: 999 },
+  ]);
+  const [savingPlanKey, setSavingPlanKey] = useState<string | null>(null);
+
   useEffect(() => {
     if (!authLoading) {
       checkAdminAccess();
@@ -60,6 +83,7 @@ const AdminPricingManagement = () => {
   useEffect(() => {
     if (isAdmin) {
       fetchPlans();
+      fetchAdPlans();
     }
   }, [isAdmin]);
 
@@ -87,6 +111,75 @@ const AdminPricingManagement = () => {
     } catch (error) {
       console.error("Error checking admin access:", error);
       navigate("/");
+    }
+  };
+
+  const fetchAdPlans = async () => {
+    try {
+      const { data, error } = await supabase
+        .from("ad_plans" as any)
+        .select("*")
+        .order("plan_tier", { ascending: true });
+
+      if (error) {
+        console.warn("ad_plans table not yet queried or empty:", error);
+        return;
+      }
+
+      if (data && data.length > 0) {
+        setFeaturedPlans(prev => [1, 2, 3].map(tier => {
+          const found = data.find((p: any) => p.ad_type === "featured" && p.plan_tier === tier);
+          return found ? {
+            id: found.id,
+            ad_type: "featured",
+            plan_tier: tier,
+            name: found.name,
+            duration_days: Number(found.duration_days),
+            price: Number(found.price)
+          } : prev[tier - 1];
+        }));
+
+        setPopupPlans(prev => [1, 2, 3].map(tier => {
+          const found = data.find((p: any) => p.ad_type === "popup" && p.plan_tier === tier);
+          return found ? {
+            id: found.id,
+            ad_type: "popup",
+            plan_tier: tier,
+            name: found.name,
+            duration_days: Number(found.duration_days),
+            price: Number(found.price)
+          } : prev[tier - 1];
+        }));
+      }
+    } catch (err) {
+      console.error("Error fetching ad plans:", err);
+    }
+  };
+
+  const handleSaveAdPlan = async (plan: AdPlan) => {
+    const key = `${plan.ad_type}-${plan.plan_tier}`;
+    setSavingPlanKey(key);
+    try {
+      const { error } = await supabase
+        .from("ad_plans" as any)
+        .upsert({
+          ad_type: plan.ad_type,
+          plan_tier: plan.plan_tier,
+          name: plan.name,
+          duration_days: Number(plan.duration_days),
+          price: Number(plan.price),
+          updated_at: new Date().toISOString()
+        }, { onConflict: "ad_type,plan_tier" });
+
+      if (error) throw error;
+
+      toast.success(`${plan.name} (${plan.ad_type.toUpperCase()}) saved successfully!`);
+      fetchAdPlans();
+    } catch (error: any) {
+      console.error("Error saving ad plan:", error);
+      toast.error(error.message || "Failed to save plan. Please make sure ad_plans table exists.");
+    } finally {
+      setSavingPlanKey(null);
     }
   };
 
@@ -202,6 +295,192 @@ const AdminPricingManagement = () => {
             Add New Plan
           </Button>
         </div>
+
+        {/* Featured Ad Plans (Plan 1, Plan 2, Plan 3) */}
+        <Card className="border-yellow-200 dark:border-yellow-900 shadow-sm">
+          <CardHeader>
+            <div className="flex items-center justify-between">
+              <div>
+                <CardTitle className="flex items-center gap-2 text-xl">
+                  <Star className="h-5 w-5 text-yellow-500 fill-yellow-500" />
+                  Featured Ad Plans
+                </CardTitle>
+                <CardDescription>
+                  Configure the 3 plans (Plan 1, Plan 2, Plan 3) shown on the /post-ad page for Featured listings.
+                </CardDescription>
+              </div>
+              <Badge variant="outline" className="border-yellow-500 text-yellow-600">3 Plans</Badge>
+            </div>
+          </CardHeader>
+          <CardContent>
+            <Table>
+              <TableHeader>
+                <TableRow>
+                  <TableHead className="w-24">Tier</TableHead>
+                  <TableHead>Plan Name</TableHead>
+                  <TableHead className="w-36">Duration (Days)</TableHead>
+                  <TableHead className="w-36">Price (₹)</TableHead>
+                  <TableHead className="text-right w-28">Action</TableHead>
+                </TableRow>
+              </TableHeader>
+              <TableBody>
+                {featuredPlans.map((plan, idx) => (
+                  <TableRow key={`featured-${plan.plan_tier}`}>
+                    <TableCell className="font-semibold text-muted-foreground">
+                      Tier {plan.plan_tier}
+                    </TableCell>
+                    <TableCell>
+                      <Input
+                        value={plan.name}
+                        onChange={(e) => {
+                          const updated = [...featuredPlans];
+                          updated[idx] = { ...updated[idx], name: e.target.value };
+                          setFeaturedPlans(updated);
+                        }}
+                        placeholder={`Plan ${plan.plan_tier}`}
+                      />
+                    </TableCell>
+                    <TableCell>
+                      <Input
+                        type="number"
+                        min="1"
+                        value={plan.duration_days}
+                        onChange={(e) => {
+                          const updated = [...featuredPlans];
+                          updated[idx] = { ...updated[idx], duration_days: parseInt(e.target.value) || 1 };
+                          setFeaturedPlans(updated);
+                        }}
+                        placeholder="Days"
+                      />
+                    </TableCell>
+                    <TableCell>
+                      <Input
+                        type="number"
+                        min="0"
+                        value={plan.price}
+                        onChange={(e) => {
+                          const updated = [...featuredPlans];
+                          updated[idx] = { ...updated[idx], price: parseFloat(e.target.value) || 0 };
+                          setFeaturedPlans(updated);
+                        }}
+                        placeholder="Price"
+                      />
+                    </TableCell>
+                    <TableCell className="text-right">
+                      <Button
+                        size="sm"
+                        onClick={() => handleSaveAdPlan(plan)}
+                        disabled={savingPlanKey === `featured-${plan.plan_tier}`}
+                        className="bg-yellow-500 hover:bg-yellow-600 text-white"
+                      >
+                        {savingPlanKey === `featured-${plan.plan_tier}` ? (
+                          <Loader2 className="h-4 w-4 animate-spin" />
+                        ) : (
+                          <>
+                            <Save className="h-4 w-4 mr-1" /> Save
+                          </>
+                        )}
+                      </Button>
+                    </TableCell>
+                  </TableRow>
+                ))}
+              </TableBody>
+            </Table>
+          </CardContent>
+        </Card>
+
+        {/* Popup Ad Plans (Plan 1, Plan 2, Plan 3) */}
+        <Card className="border-purple-200 dark:border-purple-900 shadow-sm">
+          <CardHeader>
+            <div className="flex items-center justify-between">
+              <div>
+                <CardTitle className="flex items-center gap-2 text-xl">
+                  <Sparkles className="h-5 w-5 text-purple-500 fill-purple-500" />
+                  Popup Ad Plans
+                </CardTitle>
+                <CardDescription>
+                  Configure the 3 plans (Plan 1, Plan 2, Plan 3) shown on the /post-ad page for Popup ads.
+                </CardDescription>
+              </div>
+              <Badge variant="outline" className="border-purple-500 text-purple-600">3 Plans</Badge>
+            </div>
+          </CardHeader>
+          <CardContent>
+            <Table>
+              <TableHeader>
+                <TableRow>
+                  <TableHead className="w-24">Tier</TableHead>
+                  <TableHead>Plan Name</TableHead>
+                  <TableHead className="w-36">Duration (Days)</TableHead>
+                  <TableHead className="w-36">Price (₹)</TableHead>
+                  <TableHead className="text-right w-28">Action</TableHead>
+                </TableRow>
+              </TableHeader>
+              <TableBody>
+                {popupPlans.map((plan, idx) => (
+                  <TableRow key={`popup-${plan.plan_tier}`}>
+                    <TableCell className="font-semibold text-muted-foreground">
+                      Tier {plan.plan_tier}
+                    </TableCell>
+                    <TableCell>
+                      <Input
+                        value={plan.name}
+                        onChange={(e) => {
+                          const updated = [...popupPlans];
+                          updated[idx] = { ...updated[idx], name: e.target.value };
+                          setPopupPlans(updated);
+                        }}
+                        placeholder={`Plan ${plan.plan_tier}`}
+                      />
+                    </TableCell>
+                    <TableCell>
+                      <Input
+                        type="number"
+                        min="1"
+                        value={plan.duration_days}
+                        onChange={(e) => {
+                          const updated = [...popupPlans];
+                          updated[idx] = { ...updated[idx], duration_days: parseInt(e.target.value) || 1 };
+                          setPopupPlans(updated);
+                        }}
+                        placeholder="Days"
+                      />
+                    </TableCell>
+                    <TableCell>
+                      <Input
+                        type="number"
+                        min="0"
+                        value={plan.price}
+                        onChange={(e) => {
+                          const updated = [...popupPlans];
+                          updated[idx] = { ...updated[idx], price: parseFloat(e.target.value) || 0 };
+                          setPopupPlans(updated);
+                        }}
+                        placeholder="Price"
+                      />
+                    </TableCell>
+                    <TableCell className="text-right">
+                      <Button
+                        size="sm"
+                        onClick={() => handleSaveAdPlan(plan)}
+                        disabled={savingPlanKey === `popup-${plan.plan_tier}`}
+                        className="bg-purple-600 hover:bg-purple-700 text-white"
+                      >
+                        {savingPlanKey === `popup-${plan.plan_tier}` ? (
+                          <Loader2 className="h-4 w-4 animate-spin" />
+                        ) : (
+                          <>
+                            <Save className="h-4 w-4 mr-1" /> Save
+                          </>
+                        )}
+                      </Button>
+                    </TableCell>
+                  </TableRow>
+                ))}
+              </TableBody>
+            </Table>
+          </CardContent>
+        </Card>
 
         <Card>
           <CardHeader>

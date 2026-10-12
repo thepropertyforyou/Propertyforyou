@@ -9,8 +9,9 @@ import { Textarea } from "@/components/ui/textarea";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
+import { Badge } from "@/components/ui/badge";
 import { toast } from "sonner";
-import { Upload, X, Star, Image as ImageIcon, Phone, Eye, Check, AlertTriangle, Sparkles } from "lucide-react";
+import { Upload, X, Star, Image as ImageIcon, Phone, Eye, Check, AlertTriangle, Sparkles, Loader2, ArrowLeft } from "lucide-react";
 import { useAuth } from "@/hooks/useAuth";
 import { supabase } from "@/integrations/supabase/client";
 import { Card } from "@/components/ui/card";
@@ -18,6 +19,15 @@ import { ImageCropperDialog } from "@/components/common/ImageCropperDialog";
 import { statesAndDistricts } from "@/data/india-locations";
 
 type PostingType = "free" | "featured" | "popup";
+
+export interface AdPlan {
+  id?: string;
+  ad_type: "featured" | "popup";
+  plan_tier: number;
+  name: string;
+  duration_days: number;
+  price: number;
+}
 
 const PostAd = () => {
   const navigate = useNavigate();
@@ -40,8 +50,14 @@ const PostAd = () => {
   const [agreedToTerms, setAgreedToTerms] = useState(false);
   const [selectedDate, setSelectedDate] = useState("");
   const [availableSlots, setAvailableSlots] = useState<number[]>([]);
+  const [bookedSlots, setBookedSlots] = useState<number[]>([]);
   const [selectedSlot, setSelectedSlot] = useState<number | null>(null);
   const [pricingPlans, setPricingPlans] = useState<any[]>([]);
+
+  // Multi-step flow for Featured and Popup Ads
+  const [currentStep, setCurrentStep] = useState<"form" | "plan" | "schedule" | "confirm">("form");
+  const [adPlans, setAdPlans] = useState<AdPlan[]>([]);
+  const [selectedPlan, setSelectedPlan] = useState<AdPlan | null>(null);
   
   const [cropperOpen, setCropperOpen] = useState(false);
   const [rawImageSrc, setRawImageSrc] = useState<string | null>(null);
@@ -103,6 +119,54 @@ const PostAd = () => {
   }, []);
 
   useEffect(() => {
+    const fetchAdPlans = async () => {
+      try {
+        const { data, error } = await supabase
+          .from("ad_plans" as any)
+          .select("*")
+          .order("plan_tier", { ascending: true });
+
+        if (!error && data && data.length > 0) {
+          setAdPlans(data.map((p: any) => ({
+            id: p.id,
+            ad_type: p.ad_type,
+            plan_tier: Number(p.plan_tier),
+            name: p.name,
+            duration_days: Number(p.duration_days),
+            price: Number(p.price)
+          })));
+        }
+      } catch (err) {
+        console.warn("Could not fetch ad_plans:", err);
+      }
+    };
+    fetchAdPlans();
+  }, []);
+
+  const getPlansForType = (type: "featured" | "popup"): AdPlan[] => {
+    const matching = adPlans.filter(p => p.ad_type === type);
+    if (matching.length >= 3) return matching;
+
+    const defaults: Record<"featured" | "popup", AdPlan[]> = {
+      featured: [
+        { ad_type: "featured", plan_tier: 1, name: "Plan 1", duration_days: 7, price: 199 },
+        { ad_type: "featured", plan_tier: 2, name: "Plan 2", duration_days: 15, price: 349 },
+        { ad_type: "featured", plan_tier: 3, name: "Plan 3", duration_days: 30, price: 499 },
+      ],
+      popup: [
+        { ad_type: "popup", plan_tier: 1, name: "Plan 1", duration_days: 1, price: 199 },
+        { ad_type: "popup", plan_tier: 2, name: "Plan 2", duration_days: 3, price: 499 },
+        { ad_type: "popup", plan_tier: 3, name: "Plan 3", duration_days: 7, price: 999 },
+      ]
+    };
+
+    return [1, 2, 3].map(tier => {
+      const found = matching.find(p => p.plan_tier === tier);
+      return found || defaults[type][tier - 1];
+    });
+  };
+
+  useEffect(() => {
     const fetchCategoryId = async () => {
       const { data } = await supabase.from("categories").select("id").eq("slug", category).single();
       if (data) setCategoryId(data.id);
@@ -120,10 +184,16 @@ const PostAd = () => {
     try {
       const { data, error } = await supabase.from("popup_ad_schedules").select("slot_number").eq("schedule_date", date);
       if (error) throw error;
-      const bookedSlots = data.map(s => s.slot_number);
-      const available = [1, 2, 3].filter(slot => !bookedSlots.includes(slot));
+      const booked = (data || []).map(s => s.slot_number);
+      setBookedSlots(booked);
+      const available = [1, 2, 3].filter(slot => !booked.includes(slot));
       setAvailableSlots(available);
-      if (available.length === 0) toast.error("All slots booked for this date");
+      if (available.length === 0) {
+        toast.error("All 3 slots are booked for this date");
+        setSelectedSlot(null);
+      } else if (selectedSlot && booked.includes(selectedSlot)) {
+        setSelectedSlot(null);
+      }
     } catch (error) {
       console.error("Error checking slots:", error);
     }
@@ -189,29 +259,62 @@ const PostAd = () => {
     return publicUrl;
   };
 
-  const handleSubmit = async () => {
+  const validateInitialForm = (): boolean => {
     if (!formData.title.trim() || !formData.price || parseFloat(formData.price) <= 0 || !formData.district || images.length === 0 || !agreedToTerms) {
       toast.error("Please fill all required fields and agree to terms");
-      return;
+      return false;
     }
     if (!subCategory) {
       toast.error("Please select a subcategory");
-      return;
+      return false;
     }
     if (postingType !== "free") {
       if (!formData.description.trim()) {
         toast.error("Description required for featured/popup listings");
-        return;
+        return false;
       }
       if (!formData.sellerPhone.trim()) {
         toast.error("Contact number required for featured/popup listings");
+        return false;
+      }
+    }
+    if (!user) {
+      sessionStorage.setItem("pendingAdFormData", JSON.stringify({ formData, category, postingType }));
+      toast.error("Please login to proceed");
+      navigate("/auth?redirect=/post-ad");
+      return false;
+    }
+    return true;
+  };
+
+  const handleProceedToPlan = () => {
+    if (!validateInitialForm()) return;
+    const availablePlans = getPlansForType(postingType as "featured" | "popup");
+    if (!selectedPlan || selectedPlan.ad_type !== postingType) {
+      setSelectedPlan(availablePlans[0]);
+    }
+    setCurrentStep("plan");
+    window.scrollTo({ top: 0, behavior: "smooth" });
+  };
+
+  const handleFinalSubmit = async () => {
+    if (postingType === "free") {
+      if (!validateInitialForm()) return;
+    } else {
+      if (!selectedPlan) {
+        toast.error("Please select a plan");
+        return;
+      }
+      if (!selectedDate) {
+        toast.error(postingType === "popup" ? "Please select a date for the popup ad" : "Please select a start date for the featured ad");
+        return;
+      }
+      if (postingType === "popup" && selectedSlot === null) {
+        toast.error("Please select a slot for the popup ad");
         return;
       }
     }
-    if (postingType === "popup" && (!selectedDate || selectedSlot === null)) {
-      toast.error("Please select date and slot for popup");
-      return;
-    }
+
     if (!user) {
       sessionStorage.setItem("pendingAdFormData", JSON.stringify({ formData, category, postingType }));
       toast.error("Please login");
@@ -227,6 +330,24 @@ const PostAd = () => {
         return;
       }
 
+      // If popup ad, re-check slot double booking
+      if (postingType === "popup" && selectedDate && selectedSlot !== null) {
+        const { data: existingSlots, error: checkErr } = await supabase
+          .from("popup_ad_schedules")
+          .select("id")
+          .eq("schedule_date", selectedDate)
+          .eq("slot_number", selectedSlot);
+
+        if (checkErr) throw checkErr;
+        if (existingSlots && existingSlots.length > 0) {
+          toast.error(`Slot ${selectedSlot} on ${selectedDate} was just booked. Please choose another slot.`);
+          setIsSubmitting(false);
+          setCurrentStep("schedule");
+          checkAvailableSlots(selectedDate);
+          return;
+        }
+      }
+
       const title = formData.title || `${formData.brand || formData.propertyType || formData.type} ${formData.model || ""}`.trim();
       const attributes: any = {
         subCategory: subCategory
@@ -238,6 +359,18 @@ const PostAd = () => {
         attributes.size = formData.size;
         attributes.bedrooms = formData.bedrooms;
         attributes.furnishing = formData.furnishing;
+      }
+
+      // Attach chosen plan, price, date, and slot if featured or popup
+      if (postingType !== "free" && selectedPlan) {
+        attributes.plan_tier = selectedPlan.plan_tier;
+        attributes.plan_name = selectedPlan.name;
+        attributes.plan_duration = selectedPlan.duration_days;
+        attributes.plan_price = selectedPlan.price;
+        attributes.start_date = selectedDate;
+        if (postingType === "popup") {
+          attributes.slot_number = selectedSlot;
+        }
       }
 
       // Determine parameters based on posting type
@@ -289,10 +422,9 @@ const PostAd = () => {
         }
       }
 
-      // If popup promotion is selected, insert schedule
-      if (postingType === "popup") {
-        const popupPlan = pricingPlans.find(p => p.plan_type === "popup_30") || pricingPlans.find(p => p.plan_type === "popup");
-        const paymentAmount = popupPlan ? Number(popupPlan.price) : 999;
+      // If popup promotion is selected, insert schedule with chosen plan, date, and slot
+      if (postingType === "popup" && selectedDate && selectedSlot !== null) {
+        const paymentAmount = selectedPlan ? Number(selectedPlan.price) : 999;
 
         const { error: popupError } = await supabase
           .from("popup_ad_schedules")
@@ -310,9 +442,9 @@ const PostAd = () => {
       }
 
       if (postingType === "popup") {
-        toast.success("Popup ad submitted! Pending admin approval.");
+        toast.success("Popup ad submitted! Sent to admin portal for review.");
       } else if (postingType === "featured") {
-        toast.success("Featured ad submitted! Pending admin approval.");
+        toast.success("Featured ad submitted! Sent to admin portal for review.");
       } else {
         toast.success("Free ad posted!");
       }
@@ -406,10 +538,10 @@ const PostAd = () => {
                   <TableCell className="font-medium">Pricing</TableCell>
                   <TableCell className="text-center font-bold text-green-600">FREE</TableCell>
                   <TableCell className="text-center bg-yellow-50 dark:bg-yellow-950 font-bold">
-                    {getPlanDisplayPrice("featured_30", "₹499")}
+                    From ₹{getPlansForType("featured")[0]?.price || 199}
                   </TableCell>
                   <TableCell className="text-center bg-purple-50 dark:bg-purple-950 font-bold">
-                    {getPlanDisplayPrice("popup_30", "₹0")}
+                    From ₹{getPlansForType("popup")[0]?.price || 199}
                   </TableCell>
                 </TableRow>
               </TableBody>
@@ -419,7 +551,7 @@ const PostAd = () => {
 
         {/* Posting Type Selection */}
         <div className="grid md:grid-cols-3 gap-6 mb-8">
-          <Card className={`p-6 cursor-pointer transition-all hover:shadow-lg ${postingType === "free" ? "border-2 border-primary shadow-md" : "border-2 border-transparent"}`} onClick={() => { setPostingType("free"); setImages([]); setImagePreviews([]); }}>
+          <Card className={`p-6 cursor-pointer transition-all hover:shadow-lg ${postingType === "free" ? "border-2 border-primary shadow-md" : "border-2 border-transparent"}`} onClick={() => { setPostingType("free"); setImages([]); setImagePreviews([]); setCurrentStep("form"); }}>
             <div className="flex items-start justify-between">
               <div className="space-y-2 flex-1">
                 <h3 className="text-xl font-bold flex items-center gap-2"><ImageIcon className="h-5 w-5" />Free</h3>
@@ -431,7 +563,7 @@ const PostAd = () => {
             </div>
           </Card>
 
-          <Card className={`p-6 cursor-pointer transition-all hover:shadow-lg relative ${postingType === "featured" ? "border-2 border-yellow-500 shadow-md" : "border-2 border-transparent"}`} onClick={() => { setPostingType("featured"); setImages([]); setImagePreviews([]); }}>
+          <Card className={`p-6 cursor-pointer transition-all hover:shadow-lg relative ${postingType === "featured" ? "border-2 border-yellow-500 shadow-md" : "border-2 border-transparent"}`} onClick={() => { setPostingType("featured"); setImages([]); setImagePreviews([]); setCurrentStep("form"); }}>
             <Star className="absolute top-2 right-2 h-6 w-6 text-yellow-500 fill-yellow-500" />
             <div className="flex items-start justify-between">
               <div className="space-y-2 flex-1">
@@ -444,7 +576,7 @@ const PostAd = () => {
             </div>
           </Card>
 
-          <Card className={`p-6 cursor-pointer transition-all hover:shadow-lg relative ${postingType === "popup" ? "border-2 border-purple-500 shadow-md" : "border-2 border-transparent"}`} onClick={() => { setPostingType("popup"); setImages([]); setImagePreviews([]); }}>
+          <Card className={`p-6 cursor-pointer transition-all hover:shadow-lg relative ${postingType === "popup" ? "border-2 border-purple-500 shadow-md" : "border-2 border-transparent"}`} onClick={() => { setPostingType("popup"); setImages([]); setImagePreviews([]); setCurrentStep("form"); }}>
             <Sparkles className="absolute top-2 right-2 h-6 w-6 text-purple-500" />
             <div className="flex items-start justify-between">
               <div className="space-y-2 flex-1">
@@ -458,259 +590,615 @@ const PostAd = () => {
           </Card>
         </div>
 
-        {/* Date & Slot for Popup */}
-        {postingType === "popup" && (
-          <Card className="p-6 mb-6">
-            <h3 className="font-semibold mb-4">Select Popup Schedule</h3>
-            <div className="grid md:grid-cols-2 gap-4">
-              <div className="space-y-2">
-                <Label htmlFor="popupDate">Date</Label>
-                <Input id="popupDate" type="date" value={selectedDate} min={new Date().toISOString().split('T')[0]} onChange={(e) => setSelectedDate(e.target.value)} />
-              </div>
-              {selectedDate && availableSlots.length > 0 && (
-                <div className="space-y-2">
-                  <Label>Available Slots</Label>
-                  <div className="flex gap-2">
-                    {availableSlots.map(slot => (
-                      <Button key={slot} variant={selectedSlot === slot ? "default" : "outline"} onClick={() => setSelectedSlot(slot)}>Slot {slot}</Button>
-                    ))}
-                  </div>
-                </div>
-              )}
+        {/* Multi-step progress indicator for Featured / Popup Ads */}
+        {postingType !== "free" && (
+          <div className="flex items-center justify-between mb-8 max-w-2xl mx-auto px-4 bg-muted/30 py-3 rounded-xl border">
+            <div className={`flex items-center gap-2 text-sm font-semibold ${currentStep === "form" ? "text-primary" : "text-muted-foreground"}`}>
+              <span className={`w-7 h-7 rounded-full flex items-center justify-center text-xs font-bold ${currentStep === "form" ? "bg-primary text-primary-foreground" : "bg-muted text-foreground"}`}>1</span>
+              <span>Ad Form</span>
             </div>
-          </Card>
+            <div className="h-0.5 flex-1 bg-muted-foreground/20 mx-2" />
+            <div className={`flex items-center gap-2 text-sm font-semibold ${currentStep === "plan" ? "text-primary" : "text-muted-foreground"}`}>
+              <span className={`w-7 h-7 rounded-full flex items-center justify-center text-xs font-bold ${currentStep === "plan" ? "bg-primary text-primary-foreground" : "bg-muted text-foreground"}`}>2</span>
+              <span>Choose Plan</span>
+            </div>
+            <div className="h-0.5 flex-1 bg-muted-foreground/20 mx-2" />
+            <div className={`flex items-center gap-2 text-sm font-semibold ${currentStep === "schedule" ? "text-primary" : "text-muted-foreground"}`}>
+              <span className={`w-7 h-7 rounded-full flex items-center justify-center text-xs font-bold ${currentStep === "schedule" ? "bg-primary text-primary-foreground" : "bg-muted text-foreground"}`}>3</span>
+              <span>Schedule & Slot</span>
+            </div>
+            <div className="h-0.5 flex-1 bg-muted-foreground/20 mx-2" />
+            <div className={`flex items-center gap-2 text-sm font-semibold ${currentStep === "confirm" ? "text-primary" : "text-muted-foreground"}`}>
+              <span className={`w-7 h-7 rounded-full flex items-center justify-center text-xs font-bold ${currentStep === "confirm" ? "bg-primary text-primary-foreground" : "bg-muted text-foreground"}`}>4</span>
+              <span>Confirm</span>
+            </div>
+          </div>
         )}
 
-        {/* Category */}
-        <Card className="p-6 mb-6">
-          <h2 className="text-xl font-semibold mb-4">Category</h2>
-          <div className="flex gap-4">
-            <Button variant={category === "properties" ? "default" : "outline"} onClick={() => setCategory("properties")}>Properties</Button>
-          </div>
-        </Card>
+        {/* STEP 1: Main Form */}
+        {currentStep === "form" && (
+          <>
+            {/* Category */}
+            <Card className="p-6 mb-6">
+              <h2 className="text-xl font-semibold mb-4">Category</h2>
+              <div className="flex gap-4">
+                <Button variant={category === "properties" ? "default" : "outline"} onClick={() => setCategory("properties")}>Properties</Button>
+              </div>
+            </Card>
 
-        {/* Subcategory */}
-        <Card className="p-6 mb-6">
-          <h2 className="text-xl font-semibold mb-4">Subcategory *</h2>
-          <div className="flex flex-wrap gap-3">
-            {category === "properties" && (
-              <>
-                <Button type="button" variant={subCategory === "sales" ? "default" : "outline"} onClick={() => setSubCategory("sales")}>Sales</Button>
-                <Button type="button" variant={subCategory === "rent" ? "default" : "outline"} onClick={() => setSubCategory("rent")}>Rent</Button>
-                <Button type="button" variant={subCategory === "lease" ? "default" : "outline"} onClick={() => setSubCategory("lease")}>Lease</Button>
-              </>
-            )}
-          </div>
-        </Card>
+            {/* Subcategory */}
+            <Card className="p-6 mb-6">
+              <h2 className="text-xl font-semibold mb-4">Subcategory *</h2>
+              <div className="flex flex-wrap gap-3">
+                {category === "properties" && (
+                  <>
+                    <Button type="button" variant={subCategory === "sales" ? "default" : "outline"} onClick={() => setSubCategory("sales")}>Sales</Button>
+                    <Button type="button" variant={subCategory === "rent" ? "default" : "outline"} onClick={() => setSubCategory("rent")}>Rent</Button>
+                    <Button type="button" variant={subCategory === "lease" ? "default" : "outline"} onClick={() => setSubCategory("lease")}>Lease</Button>
+                  </>
+                )}
+              </div>
+            </Card>
 
-        {/* Category Fields */}
-        <Card className="p-6 mb-6">
-          <h2 className="text-xl font-semibold mb-4">Details</h2>
-          <div className="space-y-4">{renderCategoryFields()}</div>
-        </Card>
+            {/* Category Fields */}
+            <Card className="p-6 mb-6">
+              <h2 className="text-xl font-semibold mb-4">Details</h2>
+              <div className="space-y-4">{renderCategoryFields()}</div>
+            </Card>
 
-        {/* Common Fields */}
-        <Card className="p-6 mb-6">
-          <h2 className="text-xl font-semibold mb-4">Information</h2>
-          <div className="space-y-4">
-            <div className="space-y-2">
-              <Label htmlFor="title">Title *</Label>
-              <Input id="title" value={formData.title} onChange={(e) => setFormData({ ...formData, title: e.target.value })} placeholder="Enter title" />
-            </div>
-            <div className="space-y-2">
-              <Label htmlFor="price">Price (₹) *</Label>
-              {category === "properties" ? (
-                <div className="grid grid-cols-3 gap-2">
-                  <div className="col-span-2">
+            {/* Common Fields */}
+            <Card className="p-6 mb-6">
+              <h2 className="text-xl font-semibold mb-4">Information</h2>
+              <div className="space-y-4">
+                <div className="space-y-2">
+                  <Label htmlFor="title">Title *</Label>
+                  <Input id="title" value={formData.title} onChange={(e) => setFormData({ ...formData, title: e.target.value })} placeholder="Enter title" />
+                </div>
+                <div className="space-y-2">
+                  <Label htmlFor="price">Price (₹) *</Label>
+                  {category === "properties" ? (
+                    <div className="grid grid-cols-3 gap-2">
+                      <div className="col-span-2">
+                        <Input id="price" type="number" value={formData.price} onChange={(e) => setFormData({ ...formData, price: e.target.value })} placeholder="Enter price" />
+                      </div>
+                      <div>
+                        <Select value={priceUnit} onValueChange={setPriceUnit}>
+                          <SelectTrigger>
+                            <SelectValue placeholder="Unit" />
+                          </SelectTrigger>
+                          <SelectContent>
+                            <SelectItem value="sqft">Per Sq Ft</SelectItem>
+                            <SelectItem value="acre">Per Acre</SelectItem>
+                            <SelectItem value="unit">Per Unit</SelectItem>
+                          </SelectContent>
+                        </Select>
+                      </div>
+                    </div>
+                  ) : (
                     <Input id="price" type="number" value={formData.price} onChange={(e) => setFormData({ ...formData, price: e.target.value })} placeholder="Enter price" />
-                  </div>
-                  <div>
-                    <Select value={priceUnit} onValueChange={setPriceUnit}>
-                      <SelectTrigger>
-                        <SelectValue placeholder="Unit" />
-                      </SelectTrigger>
+                  )}
+                </div>
+                {postingType !== "free" && (
+                  <>
+                    <div className="space-y-2">
+                      <Label htmlFor="description">Description *</Label>
+                      <Textarea id="description" value={formData.description} onChange={(e) => setFormData({ ...formData, description: e.target.value })} placeholder="Describe your item..." rows={5} />
+                    </div>
+                    <div className="space-y-2">
+                      <Label htmlFor="sellerPhone">Contact Number *</Label>
+                      <Input id="sellerPhone" type="tel" value={formData.sellerPhone} onChange={(e) => setFormData({ ...formData, sellerPhone: e.target.value })} placeholder="Your phone" />
+                    </div>
+                  </>
+                )}
+                <div className="grid md:grid-cols-3 gap-4">
+                  <div className="space-y-2">
+                    <Label htmlFor="state">State *</Label>
+                    <Select value={formData.state} onValueChange={(value) => setFormData({ ...formData, state: value, district: "", taluk: "" })}>
+                      <SelectTrigger id="state"><SelectValue placeholder="Select State" /></SelectTrigger>
                       <SelectContent>
-                        <SelectItem value="sqft">Per Sq Ft</SelectItem>
-                        <SelectItem value="acre">Per Acre</SelectItem>
-                        <SelectItem value="unit">Per Unit</SelectItem>
+                        {statesAndDistricts.map((item) => (
+                          <SelectItem key={item.state} value={item.state}>
+                            {item.state}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  </div>
+                  <div className="space-y-2">
+                    <Label htmlFor="district">District *</Label>
+                    <Select value={formData.district} onValueChange={(value) => setFormData({ ...formData, district: value, taluk: "" })} disabled={!formData.state}>
+                      <SelectTrigger id="district"><SelectValue placeholder="Select District" /></SelectTrigger>
+                      <SelectContent>
+                        {formData.state && statesAndDistricts
+                          .find((s) => s.state === formData.state)
+                          ?.districts.map((district) => (
+                            <SelectItem key={district.name} value={district.name}>
+                              {district.name}
+                            </SelectItem>
+                          ))
+                        }
+                      </SelectContent>
+                    </Select>
+                  </div>
+                  <div className="space-y-2">
+                    <Label htmlFor="taluk">Taluk</Label>
+                    <Select value={formData.taluk} onValueChange={(value) => setFormData({ ...formData, taluk: value })} disabled={!formData.district}>
+                      <SelectTrigger id="taluk"><SelectValue placeholder="Select Taluk" /></SelectTrigger>
+                      <SelectContent>
+                        {formData.state && formData.district && statesAndDistricts
+                          .find((s) => s.state === formData.state)
+                          ?.districts.find((d) => d.name === formData.district)
+                          ?.taluks.map((taluk) => (
+                            <SelectItem key={taluk} value={taluk}>
+                              {taluk}
+                            </SelectItem>
+                          ))
+                        }
                       </SelectContent>
                     </Select>
                   </div>
                 </div>
-              ) : (
-                <Input id="price" type="number" value={formData.price} onChange={(e) => setFormData({ ...formData, price: e.target.value })} placeholder="Enter price" />
-              )}
-            </div>
-            {postingType !== "free" && (
-              <>
-                <div className="space-y-2">
-                  <Label htmlFor="description">Description *</Label>
-                  <Textarea id="description" value={formData.description} onChange={(e) => setFormData({ ...formData, description: e.target.value })} placeholder="Describe your item..." rows={5} />
-                </div>
-                <div className="space-y-2">
-                  <Label htmlFor="sellerPhone">Contact Number *</Label>
-                  <Input id="sellerPhone" type="tel" value={formData.sellerPhone} onChange={(e) => setFormData({ ...formData, sellerPhone: e.target.value })} placeholder="Your phone" />
-                </div>
-              </>
-            )}
-            <div className="grid md:grid-cols-3 gap-4">
-              <div className="space-y-2">
-                <Label htmlFor="state">State *</Label>
-                <Select value={formData.state} onValueChange={(value) => setFormData({ ...formData, state: value, district: "", taluk: "" })}>
-                  <SelectTrigger id="state"><SelectValue placeholder="Select State" /></SelectTrigger>
-                  <SelectContent>
-                    {statesAndDistricts.map((item) => (
-                      <SelectItem key={item.state} value={item.state}>
-                        {item.state}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-              </div>
-              <div className="space-y-2">
-                <Label htmlFor="district">District *</Label>
-                <Select value={formData.district} onValueChange={(value) => setFormData({ ...formData, district: value, taluk: "" })} disabled={!formData.state}>
-                  <SelectTrigger id="district"><SelectValue placeholder="Select District" /></SelectTrigger>
-                  <SelectContent>
-                    {formData.state && statesAndDistricts
-                      .find((s) => s.state === formData.state)
-                      ?.districts.map((district) => (
-                        <SelectItem key={district.name} value={district.name}>
-                          {district.name}
-                        </SelectItem>
-                      ))
-                    }
-                  </SelectContent>
-                </Select>
-              </div>
-              <div className="space-y-2">
-                <Label htmlFor="taluk">Taluk</Label>
-                <Select value={formData.taluk} onValueChange={(value) => setFormData({ ...formData, taluk: value })} disabled={!formData.district}>
-                  <SelectTrigger id="taluk"><SelectValue placeholder="Select Taluk" /></SelectTrigger>
-                  <SelectContent>
-                    {formData.state && formData.district && statesAndDistricts
-                      .find((s) => s.state === formData.state)
-                      ?.districts.find((d) => d.name === formData.district)
-                      ?.taluks.map((taluk) => (
-                        <SelectItem key={taluk} value={taluk}>
-                          {taluk}
-                        </SelectItem>
-                      ))
-                    }
-                  </SelectContent>
-                </Select>
-              </div>
-            </div>
-            {postingType === "free" && (
-              <div className="bg-blue-50 dark:bg-blue-950 p-3 rounded-lg">
-                <p className="text-xs text-blue-900 dark:text-blue-100"><strong>Note:</strong> For free posts, buyers contact you through ThePropertyForYou team. Platform contact displayed.</p>
-              </div>
-            )}
-          </div>
-        </Card>
-
-        {/* Images */}
-        <Card className="p-6 mb-6">
-          <h2 className="text-xl font-semibold mb-4">Upload Images * ({images.length}/{maxImages})</h2>
-          <div className="space-y-4">
-            <div className="border-2 border-dashed rounded-lg p-8 text-center">
-              <input type="file" id="image-upload" accept="image/*" onChange={handleImageSelect} className="hidden" disabled={images.length >= maxImages} />
-              <label htmlFor="image-upload" className={`cursor-pointer flex flex-col items-center ${images.length >= maxImages ? 'opacity-50 cursor-not-allowed' : ''}`}>
-                <Upload className="h-12 w-12 text-muted-foreground mb-2" />
-                <span className="text-sm text-muted-foreground">{images.length >= maxImages ? `Max ${maxImages} reached` : `Upload (Max ${maxImages})`}</span>
-              </label>
-            </div>
-            {imagePreviews.length > 0 && (
-              <div className="grid grid-cols-3 md:grid-cols-5 gap-4">
-                {imagePreviews.map((preview, index) => (
-                  <div key={index} className="relative group">
-                    <img src={preview} alt={`Preview ${index + 1}`} className="w-full h-24 object-cover rounded-lg shadow-md" />
-                    <button onClick={() => removeImage(index)} className="absolute top-1 right-1 bg-destructive text-destructive-foreground rounded-full p-1 opacity-0 group-hover:opacity-100 transition-opacity">
-                      <X className="h-4 w-4" />
-                    </button>
+                {postingType === "free" && (
+                  <div className="bg-blue-50 dark:bg-blue-950 p-3 rounded-lg">
+                    <p className="text-xs text-blue-900 dark:text-blue-100"><strong>Note:</strong> For free posts, buyers contact you through ThePropertyForYou team. Platform contact displayed.</p>
                   </div>
-                ))}
+                )}
               </div>
-            )}
-          </div>
-        </Card>
+            </Card>
 
-        {/* Verification Document (Optional) */}
-        <Card className="p-6 mb-6">
-          <h2 className="text-xl font-semibold mb-2">Verification Document (Optional)</h2>
-          <p className="text-sm text-muted-foreground mb-4">
-            Upload verification documents (e.g. registration, property papers, certificate) to get a "Verified" badge. Uploaded documents are only visible to administrators and are never shown publicly.
-          </p>
-          <div className="space-y-4">
-            <div className="border-2 border-dashed rounded-lg p-6 text-center bg-muted/10 relative">
-              <input 
-                type="file" 
-                id="doc-upload" 
-                accept=".pdf,image/*" 
-                onChange={(e) => {
-                  const file = e.target.files?.[0];
-                  if (file) {
-                    setVerificationDoc(file);
-                    setVerificationDocName(file.name);
-                  }
-                }} 
-                className="hidden" 
-              />
-              <label htmlFor="doc-upload" className="cursor-pointer flex flex-col items-center">
-                <Upload className="h-8 w-8 text-muted-foreground mb-2" />
-                <span className="text-sm font-medium text-foreground">
-                  {verificationDocName ? `Selected: ${verificationDocName}` : "Choose PDF or Image"}
-                </span>
-                <span className="text-xs text-muted-foreground mt-1">Optional, max 10MB</span>
-              </label>
-              {verificationDoc && (
-                <Button 
-                  type="button" 
-                  variant="ghost" 
-                  size="sm" 
-                  onClick={() => {
-                    setVerificationDoc(null);
-                    setVerificationDocName("");
-                  }} 
-                  className="absolute top-2 right-2 text-destructive hover:bg-destructive/10"
-                >
-                  <X className="h-4 w-4 mr-1" /> Clear
-                </Button>
-              )}
-            </div>
-          </div>
-        </Card>
-
-        {/* Terms */}
-        <Card className="p-6 mb-6 border-2 border-amber-200 dark:border-amber-800">
-          <div className="flex items-start gap-3">
-            <Checkbox id="terms" checked={agreedToTerms} onCheckedChange={(checked) => setAgreedToTerms(checked as boolean)} />
-            <div className="space-y-2 flex-1">
-              <Label htmlFor="terms" className="text-base font-semibold cursor-pointer">Terms & Conditions</Label>
-              <div className="text-sm text-muted-foreground space-y-1 bg-amber-50 dark:bg-amber-950 p-4 rounded-lg">
-                <div className="flex items-start gap-2">
-                  <AlertTriangle className="h-4 w-4 text-amber-600 mt-0.5 flex-shrink-0" />
-                  <p><strong>Legal Notice:</strong> Only legal products allowed under Property categories.</p>
+            {/* Images */}
+            <Card className="p-6 mb-6">
+              <h2 className="text-xl font-semibold mb-4">Upload Images * ({images.length}/{maxImages})</h2>
+              <div className="space-y-4">
+                <div className="border-2 border-dashed rounded-lg p-8 text-center">
+                  <input type="file" id="image-upload" accept="image/*" onChange={handleImageSelect} className="hidden" disabled={images.length >= maxImages} />
+                  <label htmlFor="image-upload" className={`cursor-pointer flex flex-col items-center ${images.length >= maxImages ? 'opacity-50 cursor-not-allowed' : ''}`}>
+                    <Upload className="h-12 w-12 text-muted-foreground mb-2" />
+                    <span className="text-sm text-muted-foreground">{images.length >= maxImages ? `Max ${maxImages} reached` : `Upload (Max ${maxImages})`}</span>
+                  </label>
                 </div>
-                <p className="ml-6">Posting illegal items, counterfeit goods, or misleading information is prohibited.</p>
-                <p className="ml-6">Admin may reject suspicious listings and file complaints for illegal activity.</p>
+                {imagePreviews.length > 0 && (
+                  <div className="grid grid-cols-3 md:grid-cols-5 gap-4">
+                    {imagePreviews.map((preview, index) => (
+                      <div key={index} className="relative group">
+                        <img src={preview} alt={`Preview ${index + 1}`} className="w-full h-24 object-cover rounded-lg shadow-md" />
+                        <button onClick={() => removeImage(index)} className="absolute top-1 right-1 bg-destructive text-destructive-foreground rounded-full p-1 opacity-0 group-hover:opacity-100 transition-opacity">
+                          <X className="h-4 w-4" />
+                        </button>
+                      </div>
+                    ))}
+                  </div>
+                )}
               </div>
+            </Card>
+
+            {/* Verification Document (Optional) */}
+            <Card className="p-6 mb-6">
+              <h2 className="text-xl font-semibold mb-2">Verification Document (Optional)</h2>
+              <p className="text-sm text-muted-foreground mb-4">
+                Upload verification documents (e.g. registration, property papers, certificate) to get a "Verified" badge. Uploaded documents are only visible to administrators and are never shown publicly.
+              </p>
+              <div className="space-y-4">
+                <div className="border-2 border-dashed rounded-lg p-6 text-center bg-muted/10 relative">
+                  <input 
+                    type="file" 
+                    id="doc-upload" 
+                    accept=".pdf,image/*" 
+                    onChange={(e) => {
+                      const file = e.target.files?.[0];
+                      if (file) {
+                        setVerificationDoc(file);
+                        setVerificationDocName(file.name);
+                      }
+                    }} 
+                    className="hidden" 
+                  />
+                  <label htmlFor="doc-upload" className="cursor-pointer flex flex-col items-center">
+                    <Upload className="h-8 w-8 text-muted-foreground mb-2" />
+                    <span className="text-sm font-medium text-foreground">
+                      {verificationDocName ? `Selected: ${verificationDocName}` : "Choose PDF or Image"}
+                    </span>
+                    <span className="text-xs text-muted-foreground mt-1">Optional, max 10MB</span>
+                  </label>
+                  {verificationDoc && (
+                    <Button 
+                      type="button" 
+                      variant="ghost" 
+                      size="sm" 
+                      onClick={() => {
+                        setVerificationDoc(null);
+                        setVerificationDocName("");
+                      }} 
+                      className="absolute top-2 right-2 text-destructive hover:bg-destructive/10"
+                    >
+                      <X className="h-4 w-4 mr-1" /> Clear
+                    </Button>
+                  )}
+                </div>
+              </div>
+            </Card>
+
+            {/* Terms */}
+            <Card className="p-6 mb-6 border-2 border-amber-200 dark:border-amber-800">
+              <div className="flex items-start gap-3">
+                <Checkbox id="terms" checked={agreedToTerms} onCheckedChange={(checked) => setAgreedToTerms(checked as boolean)} />
+                <div className="space-y-2 flex-1">
+                  <Label htmlFor="terms" className="text-base font-semibold cursor-pointer">Terms & Conditions</Label>
+                  <div className="text-sm text-muted-foreground space-y-1 bg-amber-50 dark:bg-amber-950 p-4 rounded-lg">
+                    <div className="flex items-start gap-2">
+                      <AlertTriangle className="h-4 w-4 text-amber-600 mt-0.5 flex-shrink-0" />
+                      <p><strong>Legal Notice:</strong> Only legal products allowed under Property categories.</p>
+                    </div>
+                    <p className="ml-6">Posting illegal items, counterfeit goods, or misleading information is prohibited.</p>
+                    <p className="ml-6">Admin may reject suspicious listings and file complaints for illegal activity.</p>
+                  </div>
+                </div>
+              </div>
+            </Card>
+
+            <ImageCropperDialog
+              open={cropperOpen}
+              onOpenChange={setCropperOpen}
+              imageSrc={rawImageSrc}
+              onCropComplete={handleCropComplete}
+              aspectRatio={4/3}
+            />
+
+            {/* Submit Button for Form Step */}
+            <Button
+              onClick={postingType === "free" ? handleFinalSubmit : handleProceedToPlan}
+              disabled={isSubmitting || !agreedToTerms}
+              className={`w-full ${
+                postingType === "popup"
+                  ? "bg-gradient-to-r from-purple-500 to-pink-500 hover:from-purple-600 hover:to-pink-600"
+                  : postingType === "featured"
+                  ? "bg-yellow-500 hover:bg-yellow-600 text-white"
+                  : "bg-primary hover:bg-primary/90"
+              }`}
+              size="lg"
+            >
+              {isSubmitting
+                ? "Processing..."
+                : postingType === "free"
+                ? "Submit Free Listing"
+                : `Continue to Choose Plan (Step 2/4)`}
+            </Button>
+          </>
+        )}
+
+        {/* STEP 2: Choose Plan (Plan 1, Plan 2, Plan 3) */}
+        {currentStep === "plan" && (
+          <div className="space-y-6">
+            <div className="text-center space-y-2 mb-8">
+              <h2 className="text-2xl font-bold flex items-center justify-center gap-2">
+                {postingType === "featured" ? (
+                  <>
+                    <Star className="h-6 w-6 text-yellow-500 fill-yellow-500" />
+                    Choose Your Featured Plan
+                  </>
+                ) : (
+                  <>
+                    <Sparkles className="h-6 w-6 text-purple-500 fill-purple-500" />
+                    Choose Your Popup Plan
+                  </>
+                )}
+              </h2>
+              <p className="text-muted-foreground">
+                Select one of the 3 plans below to proceed with your promotion.
+              </p>
+            </div>
+
+            <div className="grid md:grid-cols-3 gap-6">
+              {getPlansForType(postingType as "featured" | "popup").map((plan) => {
+                const isSelected = selectedPlan?.plan_tier === plan.plan_tier && selectedPlan?.ad_type === plan.ad_type;
+                return (
+                  <Card
+                    key={`${plan.ad_type}-${plan.plan_tier}`}
+                    className={`p-6 cursor-pointer transition-all relative hover:shadow-lg ${
+                      isSelected
+                        ? postingType === "featured"
+                          ? "border-2 border-yellow-500 bg-yellow-50/20 dark:bg-yellow-950/20 shadow-md ring-2 ring-yellow-400"
+                          : "border-2 border-purple-500 bg-purple-50/20 dark:bg-purple-950/20 shadow-md ring-2 ring-purple-400"
+                        : "border-2 border-border hover:border-muted-foreground/50"
+                    }`}
+                    onClick={() => setSelectedPlan(plan)}
+                  >
+                    {isSelected && (
+                      <div className={`absolute top-3 right-3 h-6 w-6 rounded-full flex items-center justify-center text-white ${postingType === "featured" ? "bg-yellow-500" : "bg-purple-600"}`}>
+                        <Check className="h-4 w-4" />
+                      </div>
+                    )}
+                    <div className="space-y-4">
+                      <div>
+                        <Badge variant={isSelected ? "default" : "outline"} className="mb-2">
+                          Plan {plan.plan_tier}
+                        </Badge>
+                        <h3 className="text-xl font-bold">{plan.name}</h3>
+                      </div>
+                      <div>
+                        <div className="text-3xl font-extrabold text-foreground">
+                          ₹{plan.price}
+                        </div>
+                        <p className="text-sm text-muted-foreground mt-1">
+                          Duration: <span className="font-semibold text-foreground">{plan.duration_days} Days</span>
+                        </p>
+                      </div>
+                      <ul className="text-sm space-y-2 text-muted-foreground pt-4 border-t">
+                        <li className="flex items-center gap-2">
+                          <Check className="h-4 w-4 text-green-500 flex-shrink-0" />
+                          <span>Valid for {plan.duration_days} days</span>
+                        </li>
+                        <li className="flex items-center gap-2">
+                          <Check className="h-4 w-4 text-green-500 flex-shrink-0" />
+                          <span>{postingType === "featured" ? "Featured badge & homepage top section" : "High-impact popup modal exposure"}</span>
+                        </li>
+                        <li className="flex items-center gap-2">
+                          <Check className="h-4 w-4 text-green-500 flex-shrink-0" />
+                          <span>Direct buyer contact enabled</span>
+                        </li>
+                      </ul>
+                    </div>
+                  </Card>
+                );
+              })}
+            </div>
+
+            <div className="flex justify-between items-center pt-6 border-t mt-8">
+              <Button variant="outline" onClick={() => setCurrentStep("form")} size="lg">
+                <ArrowLeft className="h-4 w-4 mr-2" /> Back to Ad Form
+              </Button>
+              <Button
+                onClick={() => {
+                  if (!selectedPlan) {
+                    toast.error("Please select a plan to continue");
+                    return;
+                  }
+                  setCurrentStep("schedule");
+                  window.scrollTo({ top: 0, behavior: "smooth" });
+                }}
+                disabled={!selectedPlan}
+                size="lg"
+                className={postingType === "featured" ? "bg-yellow-500 hover:bg-yellow-600 text-white" : "bg-purple-600 hover:bg-purple-700 text-white"}
+              >
+                Continue to Pick Schedule & Slot
+              </Button>
             </div>
           </div>
-        </Card>
+        )}
 
-        <ImageCropperDialog
-          open={cropperOpen}
-          onOpenChange={setCropperOpen}
-          imageSrc={rawImageSrc}
-          onCropComplete={handleCropComplete}
-          aspectRatio={4/3}
-        />
+        {/* STEP 3: Pick Slot and Date */}
+        {currentStep === "schedule" && (
+          <div className="space-y-6 max-w-2xl mx-auto">
+            <div className="text-center space-y-2 mb-6">
+              <h2 className="text-2xl font-bold">
+                {postingType === "popup" ? "Pick Date & Slot (1-3)" : "Pick Featured Start Date"}
+              </h2>
+              <p className="text-muted-foreground">
+                {postingType === "popup"
+                  ? "Popup ads run in 3 daily slots (maximum 3 ads per day). Select date and an available slot."
+                  : `Select when your ${selectedPlan?.name || "Featured"} promotion should begin.`}
+              </p>
+            </div>
 
-        {/* Submit */}
-        <Button onClick={handleSubmit} disabled={isSubmitting || !agreedToTerms} className={`w-full ${postingType === "popup" ? "bg-gradient-to-r from-purple-500 to-pink-500 hover:from-purple-600 hover:to-pink-600" : postingType === "featured" ? "bg-yellow-500 hover:bg-yellow-600 text-white" : "bg-primary hover:bg-primary/90"}`} size="lg">
-          {isSubmitting ? "Processing..." : postingType === "popup" ? "Submit Popup Ad" : postingType === "featured" ? "Submit Featured Ad" : "Submit Free Listing"}
-        </Button>
+            <Card className="p-6 space-y-6 shadow-sm">
+              {/* Date Picker */}
+              <div className="space-y-2">
+                <Label htmlFor="scheduleDatePicker" className="text-base font-semibold">
+                  {postingType === "popup" ? "Scheduled Popup Date *" : "Promotion Start Date *"}
+                </Label>
+                <Input
+                  id="scheduleDatePicker"
+                  type="date"
+                  min={new Date().toISOString().split("T")[0]}
+                  value={selectedDate}
+                  onChange={(e) => {
+                    setSelectedDate(e.target.value);
+                    if (postingType === "popup") {
+                      checkAvailableSlots(e.target.value);
+                    }
+                  }}
+                  className="text-base py-5"
+                />
+              </div>
+
+              {/* Popup Ads: Slot 1-3, max 3 per day, hide or disable booked slots */}
+              {postingType === "popup" && (
+                <div className="space-y-3 pt-4 border-t">
+                  <Label className="text-base font-semibold">Choose Available Slot (Max 3 ads/day) *</Label>
+                  {!selectedDate ? (
+                    <p className="text-sm text-muted-foreground italic">
+                      Please select a date above first to view slot availability.
+                    </p>
+                  ) : (
+                    <div className="grid grid-cols-3 gap-3">
+                      {[1, 2, 3].map((slot) => {
+                        const isBooked = bookedSlots.includes(slot);
+                        const isSelected = selectedSlot === slot;
+                        return (
+                          <button
+                            key={slot}
+                            type="button"
+                            disabled={isBooked}
+                            onClick={() => setSelectedSlot(slot)}
+                            className={`p-4 rounded-xl border text-center transition-all flex flex-col items-center justify-center gap-2 ${
+                              isBooked
+                                ? "opacity-40 cursor-not-allowed bg-muted border-border"
+                                : isSelected
+                                ? "border-2 border-purple-600 bg-purple-50 dark:bg-purple-950/40 text-purple-900 dark:text-purple-100 shadow-sm ring-2 ring-purple-400"
+                                : "border-border hover:border-purple-300 hover:bg-muted/40 cursor-pointer"
+                            }`}
+                          >
+                            <span className="font-bold text-lg">Slot {slot}</span>
+                            {isBooked ? (
+                              <Badge variant="destructive" className="text-[10px] px-1.5 py-0">
+                                Booked
+                              </Badge>
+                            ) : isSelected ? (
+                              <Badge className="bg-purple-600 text-[10px] px-1.5 py-0">
+                                Selected
+                              </Badge>
+                            ) : (
+                              <Badge variant="outline" className="text-green-600 border-green-500 text-[10px] px-1.5 py-0">
+                                Available
+                              </Badge>
+                            )}
+                          </button>
+                        );
+                      })}
+                    </div>
+                  )}
+
+                  {selectedDate && bookedSlots.length >= 3 && (
+                    <div className="p-3 bg-destructive/10 border border-destructive/20 rounded-lg text-sm text-destructive font-medium">
+                      All 3 slots are fully booked for {selectedDate}. Please select another date.
+                    </div>
+                  )}
+                </div>
+              )}
+
+              {/* Featured Ad info */}
+              {postingType === "featured" && selectedDate && selectedPlan && (
+                <div className="bg-yellow-50 dark:bg-yellow-950/40 p-4 rounded-lg border border-yellow-200 dark:border-yellow-900 text-sm space-y-1">
+                  <p className="font-semibold text-yellow-900 dark:text-yellow-100">
+                    Plan Selected: {selectedPlan.name} ({selectedPlan.duration_days} Days)
+                  </p>
+                  <p className="text-yellow-800 dark:text-yellow-200">
+                    Listing will be featured starting on <strong>{new Date(selectedDate).toLocaleDateString()}</strong>.
+                  </p>
+                </div>
+              )}
+            </Card>
+
+            <div className="flex justify-between items-center pt-6 border-t">
+              <Button variant="outline" onClick={() => setCurrentStep("plan")} size="lg">
+                <ArrowLeft className="h-4 w-4 mr-2" /> Back to Plans
+              </Button>
+              <Button
+                onClick={() => {
+                  if (!selectedDate) {
+                    toast.error("Please choose a date");
+                    return;
+                  }
+                  if (postingType === "popup" && selectedSlot === null) {
+                    toast.error("Please pick an available slot");
+                    return;
+                  }
+                  setCurrentStep("confirm");
+                  window.scrollTo({ top: 0, behavior: "smooth" });
+                }}
+                disabled={!selectedDate || (postingType === "popup" && selectedSlot === null)}
+                size="lg"
+                className={postingType === "featured" ? "bg-yellow-500 hover:bg-yellow-600 text-white" : "bg-purple-600 hover:bg-purple-700 text-white"}
+              >
+                Proceed to Confirm
+              </Button>
+            </div>
+          </div>
+        )}
+
+        {/* STEP 4: Confirm & Submit */}
+        {currentStep === "confirm" && (
+          <div className="space-y-6 max-w-2xl mx-auto">
+            <div className="text-center space-y-2 mb-6">
+              <h2 className="text-2xl font-bold">Review & Confirm Your Ad</h2>
+              <p className="text-muted-foreground">
+                Verify all details before submitting. Once confirmed, your ad will be sent to the admin portal.
+              </p>
+            </div>
+
+            <Card className="p-6 space-y-5 shadow-sm border">
+              <div className="flex items-center justify-between pb-4 border-b">
+                <div>
+                  <span className="text-xs uppercase font-semibold text-muted-foreground">Promotional Ad</span>
+                  <h3 className="text-xl font-bold flex items-center gap-2 mt-0.5">
+                    {postingType === "featured" ? (
+                      <>
+                        <Star className="h-5 w-5 text-yellow-500 fill-yellow-500" />
+                        Featured Listing
+                      </>
+                    ) : (
+                      <>
+                        <Sparkles className="h-5 w-5 text-purple-500 fill-purple-500" />
+                        Popup Ad
+                      </>
+                    )}
+                  </h3>
+                </div>
+                <Badge className={postingType === "featured" ? "bg-yellow-500" : "bg-purple-600"}>
+                  {selectedPlan?.name}
+                </Badge>
+              </div>
+
+              <div className="grid grid-cols-2 gap-4 text-sm">
+                <div>
+                  <span className="text-muted-foreground text-xs uppercase">Listing Title:</span>
+                  <p className="font-semibold text-base mt-0.5">{formData.title}</p>
+                </div>
+                <div>
+                  <span className="text-muted-foreground text-xs uppercase">Property Price:</span>
+                  <p className="font-semibold text-base mt-0.5">₹{parseFloat(formData.price).toLocaleString()}</p>
+                </div>
+                <div>
+                  <span className="text-muted-foreground text-xs uppercase">Chosen Plan:</span>
+                  <p className="font-medium mt-0.5">{selectedPlan?.name} ({selectedPlan?.duration_days} Days)</p>
+                </div>
+                <div>
+                  <span className="text-muted-foreground text-xs uppercase">Plan Fee:</span>
+                  <p className="font-bold text-lg text-primary mt-0.5">₹{selectedPlan?.price}</p>
+                </div>
+                <div>
+                  <span className="text-muted-foreground text-xs uppercase">{postingType === "popup" ? "Popup Date:" : "Start Date:"}</span>
+                  <p className="font-medium mt-0.5">{selectedDate ? new Date(selectedDate).toLocaleDateString() : "—"}</p>
+                </div>
+                {postingType === "popup" && (
+                  <div>
+                    <span className="text-muted-foreground text-xs uppercase">Selected Slot:</span>
+                    <p className="font-bold text-purple-600 mt-0.5">Slot {selectedSlot}</p>
+                  </div>
+                )}
+                <div>
+                  <span className="text-muted-foreground text-xs uppercase">Location:</span>
+                  <p className="font-medium mt-0.5">{formData.district}, {formData.state}</p>
+                </div>
+                <div>
+                  <span className="text-muted-foreground text-xs uppercase">Contact:</span>
+                  <p className="font-medium mt-0.5">{formData.sellerPhone}</p>
+                </div>
+              </div>
+
+              <div className="bg-muted/50 p-4 rounded-lg text-xs text-muted-foreground space-y-1">
+                <p className="font-semibold text-foreground">Submission Note:</p>
+                <p>• Clicking <strong>Confirm & Submit</strong> will save this ad with your chosen plan, price, date, and slot.</p>
+                <p>• The ad will be immediately submitted to the admin portal for approval.</p>
+              </div>
+            </Card>
+
+            <div className="flex justify-between items-center pt-6 border-t">
+              <Button variant="outline" onClick={() => setCurrentStep("schedule")} disabled={isSubmitting} size="lg">
+                <ArrowLeft className="h-4 w-4 mr-2" /> Back
+              </Button>
+              <Button
+                onClick={handleFinalSubmit}
+                disabled={isSubmitting}
+                size="lg"
+                className={`font-bold px-8 ${
+                  postingType === "featured"
+                    ? "bg-yellow-500 hover:bg-yellow-600 text-white"
+                    : "bg-purple-600 hover:bg-purple-700 text-white"
+                }`}
+              >
+                {isSubmitting ? (
+                  <>
+                    <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                    Submitting Ad...
+                  </>
+                ) : (
+                  "Confirm & Submit"
+                )}
+              </Button>
+            </div>
+          </div>
+        )}
       </main>
       <Footer />
     </div>

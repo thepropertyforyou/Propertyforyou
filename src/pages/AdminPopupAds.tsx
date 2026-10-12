@@ -36,6 +36,7 @@ interface PopupSchedule {
     price: number;
     user_id: string;
     seller_phone: string;
+    attributes?: any;
     profiles: { name: string; email: string };
   };
 }
@@ -141,6 +142,7 @@ const AdminPopupAds = () => {
             price,
             user_id,
             seller_phone,
+            attributes,
             profiles (name, email)
           )
         `)
@@ -504,6 +506,11 @@ const AdminPopupAds = () => {
                           </Badge>
                           {schedule.admin_approved && (
                             <Badge variant="featured">Approved</Badge>
+                          )}
+                          {schedule.listings?.attributes?.plan_name && (
+                            <Badge variant="outline" className="border-purple-500 text-purple-600 bg-purple-50/50 dark:bg-purple-950/50">
+                              {schedule.listings.attributes.plan_name} ({schedule.listings.attributes.plan_duration} Days)
+                            </Badge>
                           )}
                         </div>
                         <p className="text-sm text-muted-foreground">
