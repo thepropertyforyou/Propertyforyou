@@ -28,6 +28,7 @@ export interface AdPlan {
   duration_days: number;
   price: number;
   display_price?: string | null;
+  is_active?: boolean;
 }
 
 const PostAd = () => {
@@ -146,6 +147,7 @@ const PostAd = () => {
 
             const mappedFeatured: AdPlan[] = featuredRows.map((row, idx) => {
               const hasNumericDisplay = row.display_price !== null && row.display_price !== undefined && !isNaN(Number(row.display_price));
+              const isActive = row.is_active !== undefined && row.is_active !== null ? Boolean(row.is_active) : true;
               return {
                 id: row.id,
                 ad_type: "featured",
@@ -156,11 +158,13 @@ const PostAd = () => {
                 duration_days: Number(row.duration),
                 price: Number(row.price),
                 display_price: hasNumericDisplay ? String(row.display_price) : null,
+                is_active: isActive,
               };
             });
 
             const mappedPopup: AdPlan[] = popupRows.map((row, idx) => {
               const hasNumericDisplay = row.display_price !== null && row.display_price !== undefined && !isNaN(Number(row.display_price));
+              const isActive = row.is_active !== undefined && row.is_active !== null ? Boolean(row.is_active) : true;
               return {
                 id: row.id,
                 ad_type: "popup",
@@ -171,6 +175,7 @@ const PostAd = () => {
                 duration_days: Number(row.duration),
                 price: Number(row.price),
                 display_price: hasNumericDisplay ? String(row.display_price) : null,
+                is_active: isActive,
               };
             });
 
@@ -178,17 +183,17 @@ const PostAd = () => {
             setAdPlans(freshPlans);
           }
 
-          // Validate and restore selected plan
+          // Validate and restore selected plan (never auto-select a paused plan)
           if (data.selectedPlan && freshPlans.length > 0) {
             const currentType = data.postingType || "featured";
             const matchingPlan = freshPlans.find(
               p => p.ad_type === currentType && (p.id === data.selectedPlan.id || p.plan_tier === data.selectedPlan.plan_tier)
             );
-            if (matchingPlan) {
+            if (matchingPlan && matchingPlan.is_active !== false) {
               setSelectedPlan(matchingPlan);
             } else {
-              const fallback = freshPlans.find(p => p.ad_type === currentType);
-              if (fallback) setSelectedPlan(fallback);
+              const activeFallback = freshPlans.find(p => p.ad_type === currentType && p.is_active !== false);
+              setSelectedPlan(activeFallback || null);
             }
           }
 
@@ -306,6 +311,7 @@ const PostAd = () => {
 
         const mappedFeatured: AdPlan[] = featuredRows.map((row, idx) => {
           const hasNumericDisplay = row.display_price !== null && row.display_price !== undefined && !isNaN(Number(row.display_price));
+          const isActive = row.is_active !== undefined && row.is_active !== null ? Boolean(row.is_active) : true;
           return {
             id: row.id,
             ad_type: "featured",
@@ -316,11 +322,13 @@ const PostAd = () => {
             duration_days: Number(row.duration),
             price: Number(row.price),
             display_price: hasNumericDisplay ? String(row.display_price) : null,
+            is_active: isActive,
           };
         });
 
         const mappedPopup: AdPlan[] = popupRows.map((row, idx) => {
           const hasNumericDisplay = row.display_price !== null && row.display_price !== undefined && !isNaN(Number(row.display_price));
+          const isActive = row.is_active !== undefined && row.is_active !== null ? Boolean(row.is_active) : true;
           return {
             id: row.id,
             ad_type: "popup",
@@ -331,6 +339,7 @@ const PostAd = () => {
             duration_days: Number(row.duration),
             price: Number(row.price),
             display_price: hasNumericDisplay ? String(row.display_price) : null,
+            is_active: isActive,
           };
         });
 
@@ -483,9 +492,12 @@ const PostAd = () => {
     if (!validateInitialForm()) return;
     await fetchPricingPlans();
     const availablePlans = getPlansForType(postingType as "featured" | "popup");
-    if (!selectedPlan || selectedPlan.ad_type !== postingType) {
-      if (availablePlans.length > 0) {
-        setSelectedPlan(availablePlans[0]);
+    const activePlans = availablePlans.filter(p => p.is_active !== false);
+    if (!selectedPlan || selectedPlan.ad_type !== postingType || selectedPlan.is_active === false) {
+      if (activePlans.length > 0) {
+        setSelectedPlan(activePlans[0]);
+      } else {
+        setSelectedPlan(null);
       }
     }
     setCurrentStep("plan");
@@ -500,6 +512,27 @@ const PostAd = () => {
         toast.error("Please select a plan");
         return;
       }
+
+      // Live re-check from pricing_plans that the selected plan is still active and not paused
+      try {
+        let planQuery = supabase.from("pricing_plans").select("*");
+        if (selectedPlan.id) {
+          planQuery = planQuery.eq("id", selectedPlan.id);
+        } else {
+          planQuery = planQuery.eq("plan_type", `${selectedPlan.ad_type}_${selectedPlan.duration_days}`);
+        }
+        const { data: latestPlanRow, error: checkPlanErr } = await planQuery.maybeSingle();
+        if (!checkPlanErr && latestPlanRow && latestPlanRow.is_active === false) {
+          toast.error(`The selected plan "${selectedPlan.name}" is currently paused. Please choose an active plan.`);
+          setSelectedPlan(null);
+          setCurrentStep("plan");
+          await fetchPricingPlans();
+          return;
+        }
+      } catch (checkErr) {
+        console.warn("Could not re-verify plan active status:", checkErr);
+      }
+
       if (!selectedDate) {
         toast.error(postingType === "popup" ? "Please select a date for the popup ad" : "Please select a start date for the featured ad");
         return;
@@ -1141,31 +1174,47 @@ const PostAd = () => {
 
             <div className="grid md:grid-cols-3 gap-6">
               {getPlansForType(postingType as "featured" | "popup").map((plan) => {
-                const isSelected = selectedPlan?.plan_tier === plan.plan_tier && selectedPlan?.ad_type === plan.ad_type;
+                const isPaused = plan.is_active === false;
+                const isSelected = !isPaused && selectedPlan?.plan_tier === plan.plan_tier && selectedPlan?.ad_type === plan.ad_type;
                 return (
                   <Card
                     key={`${plan.ad_type}-${plan.plan_tier}`}
-                    className={`p-6 cursor-pointer transition-all relative hover:shadow-lg ${
-                      isSelected
+                    className={`p-6 transition-all relative ${
+                      isPaused
+                        ? "opacity-60 bg-muted/40 border-muted-foreground/20 cursor-not-allowed select-none"
+                        : isSelected
                         ? postingType === "featured"
-                          ? "border-2 border-yellow-500 bg-yellow-50/20 dark:bg-yellow-950/20 shadow-md ring-2 ring-yellow-400"
-                          : "border-2 border-purple-500 bg-purple-50/20 dark:bg-purple-950/20 shadow-md ring-2 ring-purple-400"
-                        : "border-2 border-border hover:border-muted-foreground/50"
+                          ? "cursor-pointer border-2 border-yellow-500 bg-yellow-50/20 dark:bg-yellow-950/20 shadow-md ring-2 ring-yellow-400 hover:shadow-lg"
+                          : "cursor-pointer border-2 border-purple-500 bg-purple-50/20 dark:bg-purple-950/20 shadow-md ring-2 ring-purple-400 hover:shadow-lg"
+                        : "cursor-pointer border-2 border-border hover:border-muted-foreground/50 hover:shadow-lg"
                     }`}
-                    onClick={() => setSelectedPlan(plan)}
+                    onClick={() => {
+                      if (!isPaused) {
+                        setSelectedPlan(plan);
+                      }
+                    }}
                   >
-                    {isSelected && (
+                    {isPaused ? (
+                      <div className="absolute top-3 right-3">
+                        <Badge variant="outline" className="border-amber-500/50 text-amber-600 bg-amber-50 dark:bg-amber-950/50 font-semibold px-2 py-0.5 text-xs shadow-sm">
+                          Paused
+                        </Badge>
+                      </div>
+                    ) : isSelected ? (
                       <div className={`absolute top-3 right-3 h-6 w-6 rounded-full flex items-center justify-center text-white ${postingType === "featured" ? "bg-yellow-500" : "bg-purple-600"}`}>
                         <Check className="h-4 w-4" />
                       </div>
-                    )}
+                    ) : null}
                     <div className="space-y-4">
-                      <div>
-                        <Badge variant={isSelected ? "default" : "outline"} className="mb-2">
+                      <div className="flex items-center gap-2">
+                        <Badge variant={!isPaused && isSelected ? "default" : "outline"} className="mb-2">
                           Plan {plan.plan_tier}
                         </Badge>
-                        <h3 className="text-xl font-bold">{plan.name}</h3>
+                        {isPaused && (
+                          <span className="text-xs font-semibold text-muted-foreground mb-2">(Paused)</span>
+                        )}
                       </div>
+                      <h3 className={`text-xl font-bold ${isPaused ? "text-muted-foreground" : ""}`}>{plan.name}</h3>
                       <div>
                         {plan.display_price !== null && plan.display_price !== undefined && String(plan.display_price).trim() !== "" && !isNaN(Number(plan.display_price)) ? (
                           <div className="flex items-baseline gap-2">
@@ -1211,14 +1260,14 @@ const PostAd = () => {
               </Button>
               <Button
                 onClick={() => {
-                  if (!selectedPlan) {
-                    toast.error("Please select a plan to continue");
+                  if (!selectedPlan || selectedPlan.is_active === false) {
+                    toast.error("Please select an active plan to continue");
                     return;
                   }
                   setCurrentStep("schedule");
                   window.scrollTo({ top: 0, behavior: "smooth" });
                 }}
-                disabled={!selectedPlan}
+                disabled={!selectedPlan || selectedPlan.is_active === false}
                 size="lg"
                 className={postingType === "featured" ? "bg-yellow-500 hover:bg-yellow-600 text-white" : "bg-purple-600 hover:bg-purple-700 text-white"}
               >

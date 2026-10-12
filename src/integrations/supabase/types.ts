@@ -447,6 +447,7 @@ export type Database = {
           updated_at: string
           display_price: string | null
           plan_name: string | null
+          is_active: boolean | null
         }
         Insert: {
           created_at?: string
@@ -458,6 +459,7 @@ export type Database = {
           updated_at?: string
           display_price?: string | null
           plan_name?: string | null
+          is_active?: boolean | null
         }
         Update: {
           created_at?: string
@@ -469,6 +471,7 @@ export type Database = {
           updated_at?: string
           display_price?: string | null
           plan_name?: string | null
+          is_active?: boolean | null
         }
         Relationships: []
       }

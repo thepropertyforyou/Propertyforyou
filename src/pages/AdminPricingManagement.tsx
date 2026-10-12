@@ -4,6 +4,7 @@ import { supabase } from "@/integrations/supabase/client";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
+import { Switch } from "@/components/ui/switch";
 import { toast } from "sonner";
 import { Save, Star, Sparkles, Loader2 } from "lucide-react";
 import { useAuth } from "@/hooks/useAuth";
@@ -26,6 +27,7 @@ export interface AdPlan {
   duration_days: number;
   price: number;
   display_price?: string | null;
+  is_active?: boolean;
 }
 
 const AdminPricingManagement = () => {
@@ -36,14 +38,14 @@ const AdminPricingManagement = () => {
 
   // Dedicated 3 plans for Featured and Popup ads
   const [featuredPlans, setFeaturedPlans] = useState<AdPlan[]>([
-    { ad_type: "featured", plan_tier: 1, name: "Plan 1", duration_days: 30, price: 0, display_price: "" },
-    { ad_type: "featured", plan_tier: 2, name: "Plan 2", duration_days: 60, price: 350, display_price: "" },
-    { ad_type: "featured", plan_tier: 3, name: "Plan 3", duration_days: 90, price: 500, display_price: "" },
+    { ad_type: "featured", plan_tier: 1, name: "Plan 1", duration_days: 30, price: 0, display_price: "", is_active: true },
+    { ad_type: "featured", plan_tier: 2, name: "Plan 2", duration_days: 60, price: 350, display_price: "", is_active: true },
+    { ad_type: "featured", plan_tier: 3, name: "Plan 3", duration_days: 90, price: 500, display_price: "", is_active: true },
   ]);
   const [popupPlans, setPopupPlans] = useState<AdPlan[]>([
-    { ad_type: "popup", plan_tier: 1, name: "Plan 1", duration_days: 30, price: 999, display_price: "" },
-    { ad_type: "popup", plan_tier: 2, name: "Plan 2", duration_days: 60, price: 1499, display_price: "" },
-    { ad_type: "popup", plan_tier: 3, name: "Plan 3", duration_days: 90, price: 1999, display_price: "" },
+    { ad_type: "popup", plan_tier: 1, name: "Plan 1", duration_days: 30, price: 999, display_price: "", is_active: true },
+    { ad_type: "popup", plan_tier: 2, name: "Plan 2", duration_days: 60, price: 1499, display_price: "", is_active: true },
+    { ad_type: "popup", plan_tier: 3, name: "Plan 3", duration_days: 90, price: 1999, display_price: "", is_active: true },
   ]);
   const [savingPlanKey, setSavingPlanKey] = useState<string | null>(null);
 
@@ -106,6 +108,7 @@ const AdminPricingManagement = () => {
         setFeaturedPlans([1, 2, 3].map(tier => {
           const row = featuredRows[tier - 1];
           const hasNumericDisplay = row?.display_price !== null && row?.display_price !== undefined && !isNaN(Number(row.display_price));
+          const isActive = row?.is_active !== undefined && row?.is_active !== null ? Boolean(row.is_active) : true;
           return {
             id: row?.id,
             ad_type: "featured",
@@ -113,7 +116,8 @@ const AdminPricingManagement = () => {
             name: row?.plan_name || (row?.display_price && isNaN(Number(row.display_price)) && !row.display_price.startsWith("₹") ? row.display_price : `Plan ${tier}`),
             duration_days: row ? Number(row.duration) : (tier === 1 ? 30 : tier === 2 ? 60 : 90),
             price: row ? Number(row.price) : (tier === 1 ? 0 : tier === 2 ? 350 : 500),
-            display_price: hasNumericDisplay ? String(row.display_price) : ""
+            display_price: hasNumericDisplay ? String(row.display_price) : "",
+            is_active: isActive
           };
         }));
 
@@ -124,6 +128,7 @@ const AdminPricingManagement = () => {
         setPopupPlans([1, 2, 3].map(tier => {
           const row = popupRows[tier - 1];
           const hasNumericDisplay = row?.display_price !== null && row?.display_price !== undefined && !isNaN(Number(row.display_price));
+          const isActive = row?.is_active !== undefined && row?.is_active !== null ? Boolean(row.is_active) : true;
           return {
             id: row?.id,
             ad_type: "popup",
@@ -131,7 +136,8 @@ const AdminPricingManagement = () => {
             name: row?.plan_name || (row?.display_price && isNaN(Number(row.display_price)) && !row.display_price.startsWith("₹") ? row.display_price : `Plan ${tier}`),
             duration_days: row ? Number(row.duration) : (tier === 1 ? 30 : tier === 2 ? 60 : 90),
             price: row ? Number(row.price) : (tier === 1 ? 999 : tier === 2 ? 1499 : 1999),
-            display_price: hasNumericDisplay ? String(row.display_price) : ""
+            display_price: hasNumericDisplay ? String(row.display_price) : "",
+            is_active: isActive
           };
         }));
       }
@@ -157,6 +163,7 @@ const AdminPricingManagement = () => {
         price: Number(plan.price),
         display_price: displayPriceValue,
         plan_name: plan.name,
+        is_active: plan.is_active !== false,
         updated_at: new Date().toISOString()
       };
 
@@ -166,8 +173,9 @@ const AdminPricingManagement = () => {
           .update(payload)
           .eq("id", plan.id);
 
-        if (error && error.message?.includes("plan_name")) {
-          delete payload.plan_name;
+        if (error && (error.message?.includes("is_active") || error.message?.includes("plan_name"))) {
+          if (error.message.includes("is_active")) delete payload.is_active;
+          if (error.message.includes("plan_name")) delete payload.plan_name;
           const retry = await supabase.from("pricing_plans").update(payload).eq("id", plan.id);
           error = retry.error;
         }
@@ -184,8 +192,9 @@ const AdminPricingManagement = () => {
           .from("pricing_plans")
           .upsert(upsertPayload, { onConflict: "plan_type" });
 
-        if (error && error.message?.includes("plan_name")) {
-          delete upsertPayload.plan_name;
+        if (error && (error.message?.includes("is_active") || error.message?.includes("plan_name"))) {
+          if (error.message.includes("is_active")) delete upsertPayload.is_active;
+          if (error.message.includes("plan_name")) delete upsertPayload.plan_name;
           const retry = await supabase.from("pricing_plans").upsert(upsertPayload, { onConflict: "plan_type" });
           error = retry.error;
         }
@@ -220,7 +229,7 @@ const AdminPricingManagement = () => {
           <div>
             <h1 className="text-3xl font-bold text-foreground">Pricing Management</h1>
             <p className="text-muted-foreground mt-1">
-              Configure pricing plans and promotional display prices for featured listings and popup ads
+              Configure pricing plans, display prices, and status for featured listings and popup ads
             </p>
           </div>
         </div>
@@ -250,6 +259,7 @@ const AdminPricingManagement = () => {
                   <TableHead className="w-32">Duration (Days)</TableHead>
                   <TableHead className="w-32">Price (₹)</TableHead>
                   <TableHead className="w-36">Display Price (₹)</TableHead>
+                  <TableHead className="w-36 text-center">Enable / Pause</TableHead>
                   <TableHead className="text-right w-24">Action</TableHead>
                 </TableRow>
               </TableHeader>
@@ -309,6 +319,21 @@ const AdminPricingManagement = () => {
                         placeholder="Optional"
                       />
                     </TableCell>
+                    <TableCell>
+                      <div className="flex items-center justify-center gap-2">
+                        <Switch
+                          checked={plan.is_active !== false}
+                          onCheckedChange={(checked) => {
+                            const updated = [...featuredPlans];
+                            updated[idx] = { ...updated[idx], is_active: checked };
+                            setFeaturedPlans(updated);
+                          }}
+                        />
+                        <span className={`text-xs font-semibold ${plan.is_active !== false ? "text-green-600" : "text-amber-600"}`}>
+                          {plan.is_active !== false ? "Active" : "Paused"}
+                        </span>
+                      </div>
+                    </TableCell>
                     <TableCell className="text-right">
                       <Button
                         size="sm"
@@ -357,6 +382,7 @@ const AdminPricingManagement = () => {
                   <TableHead className="w-32">Duration (Days)</TableHead>
                   <TableHead className="w-32">Price (₹)</TableHead>
                   <TableHead className="w-36">Display Price (₹)</TableHead>
+                  <TableHead className="w-36 text-center">Enable / Pause</TableHead>
                   <TableHead className="text-right w-24">Action</TableHead>
                 </TableRow>
               </TableHeader>
@@ -415,6 +441,21 @@ const AdminPricingManagement = () => {
                         }}
                         placeholder="Optional"
                       />
+                    </TableCell>
+                    <TableCell>
+                      <div className="flex items-center justify-center gap-2">
+                        <Switch
+                          checked={plan.is_active !== false}
+                          onCheckedChange={(checked) => {
+                            const updated = [...popupPlans];
+                            updated[idx] = { ...updated[idx], is_active: checked };
+                            setPopupPlans(updated);
+                          }}
+                        />
+                        <span className={`text-xs font-semibold ${plan.is_active !== false ? "text-green-600" : "text-amber-600"}`}>
+                          {plan.is_active !== false ? "Active" : "Paused"}
+                        </span>
+                      </div>
                     </TableCell>
                     <TableCell className="text-right">
                       <Button
