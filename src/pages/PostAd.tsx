@@ -110,60 +110,62 @@ const PostAd = () => {
     }
   }, []);
 
+  const fetchPricingPlans = async () => {
+    try {
+      const { data, error } = await supabase
+        .from("pricing_plans")
+        .select("*")
+        .order("display_order", { ascending: true });
+
+      if (error) throw error;
+      if (data) {
+        setPricingPlans(data);
+
+        // Derive Featured Plans (ordered by display_order)
+        const featuredRows = data
+          .filter(p => p.plan_type.startsWith("featured_"))
+          .sort((a, b) => a.display_order - b.display_order);
+
+        // Derive Popup Plans (ordered by display_order)
+        const popupRows = data
+          .filter(p => p.plan_type.startsWith("popup_"))
+          .sort((a, b) => a.display_order - b.display_order);
+
+        const mappedFeatured: AdPlan[] = featuredRows.map((row, idx) => ({
+          id: row.id,
+          ad_type: "featured",
+          plan_tier: idx + 1,
+          name: row.display_price && isNaN(Number(row.display_price)) && row.display_price.trim() !== "0" && !row.display_price.startsWith("₹")
+            ? row.display_price
+            : `Plan ${idx + 1}`,
+          duration_days: Number(row.duration),
+          price: Number(row.price),
+        }));
+
+        const mappedPopup: AdPlan[] = popupRows.map((row, idx) => ({
+          id: row.id,
+          ad_type: "popup",
+          plan_tier: idx + 1,
+          name: row.display_price && isNaN(Number(row.display_price)) && row.display_price.trim() !== "0" && !row.display_price.startsWith("₹")
+            ? row.display_price
+            : `Plan ${idx + 1}`,
+          duration_days: Number(row.duration),
+          price: Number(row.price),
+        }));
+
+        setAdPlans([...mappedFeatured, ...mappedPopup]);
+      }
+    } catch (err) {
+      console.error("Error fetching pricing_plans:", err);
+    }
+  };
+
   useEffect(() => {
-    const fetchPricingPlans = async () => {
-      const { data } = await supabase.from("pricing_plans").select("*");
-      if (data) setPricingPlans(data);
-    };
     fetchPricingPlans();
   }, []);
 
-  useEffect(() => {
-    const fetchAdPlans = async () => {
-      try {
-        const { data, error } = await supabase
-          .from("ad_plans" as any)
-          .select("*")
-          .order("plan_tier", { ascending: true });
-
-        if (!error && data && data.length > 0) {
-          setAdPlans(data.map((p: any) => ({
-            id: p.id,
-            ad_type: p.ad_type,
-            plan_tier: Number(p.plan_tier),
-            name: p.name,
-            duration_days: Number(p.duration_days),
-            price: Number(p.price)
-          })));
-        }
-      } catch (err) {
-        console.warn("Could not fetch ad_plans:", err);
-      }
-    };
-    fetchAdPlans();
-  }, []);
-
   const getPlansForType = (type: "featured" | "popup"): AdPlan[] => {
-    const matching = adPlans.filter(p => p.ad_type === type);
-    if (matching.length >= 3) return matching;
-
-    const defaults: Record<"featured" | "popup", AdPlan[]> = {
-      featured: [
-        { ad_type: "featured", plan_tier: 1, name: "Plan 1", duration_days: 7, price: 199 },
-        { ad_type: "featured", plan_tier: 2, name: "Plan 2", duration_days: 15, price: 349 },
-        { ad_type: "featured", plan_tier: 3, name: "Plan 3", duration_days: 30, price: 499 },
-      ],
-      popup: [
-        { ad_type: "popup", plan_tier: 1, name: "Plan 1", duration_days: 1, price: 199 },
-        { ad_type: "popup", plan_tier: 2, name: "Plan 2", duration_days: 3, price: 499 },
-        { ad_type: "popup", plan_tier: 3, name: "Plan 3", duration_days: 7, price: 999 },
-      ]
-    };
-
-    return [1, 2, 3].map(tier => {
-      const found = matching.find(p => p.plan_tier === tier);
-      return found || defaults[type][tier - 1];
-    });
+    return adPlans.filter(p => p.ad_type === type);
   };
 
   useEffect(() => {
@@ -287,11 +289,14 @@ const PostAd = () => {
     return true;
   };
 
-  const handleProceedToPlan = () => {
+  const handleProceedToPlan = async () => {
     if (!validateInitialForm()) return;
+    await fetchPricingPlans();
     const availablePlans = getPlansForType(postingType as "featured" | "popup");
     if (!selectedPlan || selectedPlan.ad_type !== postingType) {
-      setSelectedPlan(availablePlans[0]);
+      if (availablePlans.length > 0) {
+        setSelectedPlan(availablePlans[0]);
+      }
     }
     setCurrentStep("plan");
     window.scrollTo({ top: 0, behavior: "smooth" });

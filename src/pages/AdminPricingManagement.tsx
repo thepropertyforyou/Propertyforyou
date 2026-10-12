@@ -117,42 +117,50 @@ const AdminPricingManagement = () => {
   const fetchAdPlans = async () => {
     try {
       const { data, error } = await supabase
-        .from("ad_plans" as any)
+        .from("pricing_plans")
         .select("*")
-        .order("plan_tier", { ascending: true });
+        .order("display_order", { ascending: true });
 
       if (error) {
-        console.warn("ad_plans table not yet queried or empty:", error);
+        console.warn("pricing_plans table query error:", error);
         return;
       }
 
       if (data && data.length > 0) {
-        setFeaturedPlans(prev => [1, 2, 3].map(tier => {
-          const found = data.find((p: any) => p.ad_type === "featured" && p.plan_tier === tier);
-          return found ? {
-            id: found.id,
+        const featuredRows = data
+          .filter(p => p.plan_type.startsWith("featured_"))
+          .sort((a, b) => a.display_order - b.display_order);
+
+        setFeaturedPlans([1, 2, 3].map(tier => {
+          const row = featuredRows[tier - 1];
+          return {
+            id: row?.id,
             ad_type: "featured",
             plan_tier: tier,
-            name: found.name,
-            duration_days: Number(found.duration_days),
-            price: Number(found.price)
-          } : prev[tier - 1];
+            name: row?.display_price && isNaN(Number(row.display_price)) && row.display_price.trim() !== "0" && !row.display_price.startsWith("₹") ? row.display_price : `Plan ${tier}`,
+            duration_days: row ? Number(row.duration) : (tier === 1 ? 30 : tier === 2 ? 60 : 90),
+            price: row ? Number(row.price) : (tier === 1 ? 199 : tier === 2 ? 349 : 500)
+          };
         }));
 
-        setPopupPlans(prev => [1, 2, 3].map(tier => {
-          const found = data.find((p: any) => p.ad_type === "popup" && p.plan_tier === tier);
-          return found ? {
-            id: found.id,
+        const popupRows = data
+          .filter(p => p.plan_type.startsWith("popup_"))
+          .sort((a, b) => a.display_order - b.display_order);
+
+        setPopupPlans([1, 2, 3].map(tier => {
+          const row = popupRows[tier - 1];
+          return {
+            id: row?.id,
             ad_type: "popup",
             plan_tier: tier,
-            name: found.name,
-            duration_days: Number(found.duration_days),
-            price: Number(found.price)
-          } : prev[tier - 1];
+            name: row?.display_price && isNaN(Number(row.display_price)) && row.display_price.trim() !== "0" && !row.display_price.startsWith("₹") ? row.display_price : `Plan ${tier}`,
+            duration_days: row ? Number(row.duration) : (tier === 1 ? 30 : tier === 2 ? 60 : 90),
+            price: row ? Number(row.price) : (tier === 1 ? 999 : tier === 2 ? 1499 : 1999)
+          };
         }));
       }
     } catch (err) {
-      console.error("Error fetching ad plans:", err);
+      console.error("Error fetching ad plans from pricing_plans:", err);
     }
   };
 
@@ -160,24 +168,42 @@ const AdminPricingManagement = () => {
     const key = `${plan.ad_type}-${plan.plan_tier}`;
     setSavingPlanKey(key);
     try {
-      const { error } = await supabase
-        .from("ad_plans" as any)
-        .upsert({
-          ad_type: plan.ad_type,
-          plan_tier: plan.plan_tier,
-          name: plan.name,
-          duration_days: Number(plan.duration_days),
-          price: Number(plan.price),
-          updated_at: new Date().toISOString()
-        }, { onConflict: "ad_type,plan_tier" });
+      const planType = `${plan.ad_type}_${plan.duration_days}`;
+      const displayOrder = plan.ad_type === "featured" ? plan.plan_tier : plan.plan_tier + 3;
 
-      if (error) throw error;
+      if (plan.id) {
+        const { error } = await supabase
+          .from("pricing_plans")
+          .update({
+            duration: Number(plan.duration_days),
+            price: Number(plan.price),
+            display_price: plan.name,
+            updated_at: new Date().toISOString()
+          })
+          .eq("id", plan.id);
+
+        if (error) throw error;
+      } else {
+        const { error } = await supabase
+          .from("pricing_plans")
+          .upsert({
+            plan_type: planType,
+            duration: Number(plan.duration_days),
+            price: Number(plan.price),
+            display_price: plan.name,
+            display_order: displayOrder,
+            updated_at: new Date().toISOString()
+          }, { onConflict: "plan_type" });
+
+        if (error) throw error;
+      }
 
       toast.success(`${plan.name} (${plan.ad_type.toUpperCase()}) saved successfully!`);
       fetchAdPlans();
+      fetchPlans();
     } catch (error: any) {
-      console.error("Error saving ad plan:", error);
-      toast.error(error.message || "Failed to save plan. Please make sure ad_plans table exists.");
+      console.error("Error saving ad plan to pricing_plans:", error);
+      toast.error(error.message || "Failed to save plan to pricing_plans");
     } finally {
       setSavingPlanKey(null);
     }
