@@ -98,17 +98,181 @@ const PostAd = () => {
     description: "", state: "", district: "", taluk: "", sellerPhone: "",
   });
 
+  const [uploadedImageUrls, setUploadedImageUrls] = useState<string[]>([]);
+  const [isUploadingImage, setIsUploadingImage] = useState(false);
+  const [verificationDocUrl, setVerificationDocUrl] = useState<string | null>(null);
+  const [isUploadingDoc, setIsUploadingDoc] = useState(false);
+  const [isRestoringProgress, setIsRestoringProgress] = useState(true);
+
+  // Restore progress on mount and validate plan and slot
   useEffect(() => {
-    const savedFormData = sessionStorage.getItem("pendingAdFormData");
-    if (savedFormData) {
-      const parsed = JSON.parse(savedFormData);
-      setFormData(parsed.formData);
-      setCategory(parsed.category);
-      setPostingType(parsed.postingType || "free");
-      sessionStorage.removeItem("pendingAdFormData");
-      toast.info("Form data restored");
-    }
+    const restoreProgress = async () => {
+      try {
+        const saved = localStorage.getItem("post_ad_progress");
+        if (saved) {
+          const data = JSON.parse(saved);
+          if (data.category) setCategory(data.category);
+          if (data.subCategory) setSubCategory(data.subCategory);
+          if (data.priceUnit) setPriceUnit(data.priceUnit);
+          if (data.postingType) setPostingType(data.postingType);
+          if (data.formData) setFormData(data.formData);
+          if (data.agreedToTerms !== undefined) setAgreedToTerms(data.agreedToTerms);
+          if (data.verificationDocName) setVerificationDocName(data.verificationDocName);
+          if (data.verificationDocUrl) setVerificationDocUrl(data.verificationDocUrl);
+
+          if (Array.isArray(data.uploadedImageUrls) && data.uploadedImageUrls.length > 0) {
+            setUploadedImageUrls(data.uploadedImageUrls);
+            setImagePreviews(data.uploadedImageUrls);
+          }
+
+          // Fetch latest pricing plans to validate saved plan
+          const { data: plansData } = await supabase
+            .from("pricing_plans")
+            .select("*")
+            .order("display_order", { ascending: true });
+
+          let freshPlans: AdPlan[] = [];
+          if (plansData) {
+            setPricingPlans(plansData);
+
+            const featuredRows = plansData
+              .filter(p => p.plan_type.startsWith("featured_"))
+              .sort((a, b) => a.display_order - b.display_order);
+
+            const popupRows = plansData
+              .filter(p => p.plan_type.startsWith("popup_"))
+              .sort((a, b) => a.display_order - b.display_order);
+
+            const mappedFeatured: AdPlan[] = featuredRows.map((row, idx) => ({
+              id: row.id,
+              ad_type: "featured",
+              plan_tier: idx + 1,
+              name: row.display_price && isNaN(Number(row.display_price)) && row.display_price.trim() !== "0" && !row.display_price.startsWith("₹")
+                ? row.display_price
+                : `Plan ${idx + 1}`,
+              duration_days: Number(row.duration),
+              price: Number(row.price),
+            }));
+
+            const mappedPopup: AdPlan[] = popupRows.map((row, idx) => ({
+              id: row.id,
+              ad_type: "popup",
+              plan_tier: idx + 1,
+              name: row.display_price && isNaN(Number(row.display_price)) && row.display_price.trim() !== "0" && !row.display_price.startsWith("₹")
+                ? row.display_price
+                : `Plan ${idx + 1}`,
+              duration_days: Number(row.duration),
+              price: Number(row.price),
+            }));
+
+            freshPlans = [...mappedFeatured, ...mappedPopup];
+            setAdPlans(freshPlans);
+          }
+
+          // Validate and restore selected plan
+          if (data.selectedPlan && freshPlans.length > 0) {
+            const currentType = data.postingType || "featured";
+            const matchingPlan = freshPlans.find(
+              p => p.ad_type === currentType && (p.id === data.selectedPlan.id || p.plan_tier === data.selectedPlan.plan_tier)
+            );
+            if (matchingPlan) {
+              setSelectedPlan(matchingPlan);
+            } else {
+              const fallback = freshPlans.find(p => p.ad_type === currentType);
+              if (fallback) setSelectedPlan(fallback);
+            }
+          }
+
+          // Validate and restore selected date and slot
+          let validDate = data.selectedDate || "";
+          let validSlot: number | null = data.selectedSlot !== undefined ? data.selectedSlot : null;
+
+          if (validDate) {
+            const todayStr = new Date().toISOString().split("T")[0];
+            if (validDate < todayStr) {
+              validDate = "";
+              validSlot = null;
+            } else if (data.postingType === "popup" && validSlot !== null) {
+              const { data: bookedData } = await supabase
+                .from("popup_ad_schedules")
+                .select("slot_number")
+                .eq("schedule_date", validDate);
+
+              const booked = (bookedData || []).map(s => s.slot_number);
+              setBookedSlots(booked);
+              const available = [1, 2, 3].filter(s => !booked.includes(s));
+              setAvailableSlots(available);
+
+              if (booked.includes(validSlot)) {
+                validSlot = null;
+                toast.warning(`Saved slot was booked by someone else. Please choose another slot.`);
+              }
+            }
+            setSelectedDate(validDate);
+            setSelectedSlot(validSlot);
+          }
+
+          // Restore currentStep (if user was past form step, ensure required fields exist)
+          let targetStep = data.currentStep || "form";
+          if (targetStep !== "form") {
+            const hasBasicFields = data.formData?.title && data.formData?.price && data.formData?.district && (data.uploadedImageUrls?.length > 0 || data.imagesCount > 0);
+            if (!hasBasicFields) {
+              targetStep = "form";
+            }
+          }
+          setCurrentStep(targetStep);
+          toast.info("Resumed previous progress");
+        }
+      } catch (err) {
+        console.error("Error restoring progress:", err);
+      } finally {
+        setIsRestoringProgress(false);
+      }
+    };
+
+    restoreProgress();
   }, []);
+
+  // Save progress to localStorage on change (after initial restoration)
+  useEffect(() => {
+    if (isRestoringProgress) return;
+    try {
+      const progress = {
+        category,
+        subCategory,
+        priceUnit,
+        postingType,
+        formData,
+        agreedToTerms,
+        selectedDate,
+        selectedSlot,
+        currentStep,
+        selectedPlan,
+        uploadedImageUrls,
+        verificationDocName,
+        verificationDocUrl,
+        timestamp: Date.now()
+      };
+      localStorage.setItem("post_ad_progress", JSON.stringify(progress));
+    } catch (err) {
+      console.error("Error saving progress to localStorage:", err);
+    }
+  }, [
+    category,
+    subCategory,
+    priceUnit,
+    postingType,
+    formData,
+    agreedToTerms,
+    selectedDate,
+    selectedSlot,
+    currentStep,
+    selectedPlan,
+    uploadedImageUrls,
+    verificationDocName,
+    verificationDocUrl,
+    isRestoringProgress
+  ]);
 
   const fetchPricingPlans = async () => {
     try {
@@ -161,8 +325,10 @@ const PostAd = () => {
   };
 
   useEffect(() => {
-    fetchPricingPlans();
-  }, []);
+    if (!isRestoringProgress && adPlans.length === 0) {
+      fetchPricingPlans();
+    }
+  }, [isRestoringProgress]);
 
   const getPlansForType = (type: "featured" | "popup"): AdPlan[] => {
     return adPlans.filter(p => p.ad_type === type);
@@ -205,7 +371,7 @@ const PostAd = () => {
     const file = e.target.files?.[0];
     if (file) {
       const maxImages = postingType === "free" ? 1 : 6;
-      if (images.length >= maxImages) {
+      if (uploadedImageUrls.length >= maxImages) {
         toast.error(`Maximum ${maxImages} image${maxImages === 1 ? '' : 's'} allowed`);
         return;
       }
@@ -220,49 +386,56 @@ const PostAd = () => {
     e.target.value = '';
   };
 
-  const handleCropComplete = (croppedFile: File) => {
-    setImages(prev => [...prev, croppedFile]);
-    const previewUrl = URL.createObjectURL(croppedFile);
-    setImagePreviews(prev => [...prev, previewUrl]);
+  const handleCropComplete = async (croppedFile: File) => {
+    setIsUploadingImage(true);
+    try {
+      const fileExt = croppedFile.name.split(".").pop() || "jpg";
+      const fileName = `temp_${user?.id || 'anon'}_${Date.now()}_${Math.random().toString(36).substring(7)}.${fileExt}`;
+      const { error: uploadError } = await supabase.storage.from("listing-images").upload(fileName, croppedFile);
+      if (uploadError) throw uploadError;
+
+      const { data: { publicUrl } } = supabase.storage.from("listing-images").getPublicUrl(fileName);
+      setUploadedImageUrls(prev => [...prev, publicUrl]);
+      setImagePreviews(prev => [...prev, publicUrl]);
+      toast.success("Image uploaded & saved");
+    } catch (err: any) {
+      console.error("Direct image upload failed:", err);
+      toast.error(err.message || "Failed to upload image. Please try again.");
+    } finally {
+      setIsUploadingImage(false);
+    }
   };
 
   const removeImage = (index: number) => {
-    setImages(prev => prev.filter((_, i) => i !== index));
+    setUploadedImageUrls(prev => prev.filter((_, i) => i !== index));
     setImagePreviews(prev => prev.filter((_, i) => i !== index));
   };
 
-  const uploadImages = async (listingId: string) => {
-    const uploadedUrls: string[] = [];
-    for (let i = 0; i < images.length; i++) {
-      const file = images[i];
-      const fileExt = file.name.split(".").pop();
-      const fileName = `${listingId}/${Date.now()}-${i}.${fileExt}`;
-      const { error: uploadError } = await supabase.storage.from("listing-images").upload(fileName, file);
-      if (uploadError) {
-        console.error("Upload error:", uploadError);
-        continue;
-      }
-      const { data: { publicUrl } } = supabase.storage.from("listing-images").getPublicUrl(fileName);
-      uploadedUrls.push(publicUrl);
-    }
-    return uploadedUrls;
-  };
+  const handleVerificationDocSelect = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
 
-  const uploadVerificationDoc = async (listingId: string) => {
-    if (!verificationDoc) return null;
-    const fileExt = verificationDoc.name.split(".").pop();
-    const fileName = `verification-docs/${listingId}/${Date.now()}.${fileExt}`;
-    const { error: uploadError } = await supabase.storage.from("listing-images").upload(fileName, verificationDoc);
-    if (uploadError) {
-      console.error("Verification doc upload error:", uploadError);
-      return null;
+    setVerificationDocName(file.name);
+    setIsUploadingDoc(true);
+    try {
+      const fileExt = file.name.split(".").pop() || "pdf";
+      const fileName = `verification-docs/temp_${user?.id || 'anon'}_${Date.now()}_${Math.random().toString(36).substring(7)}.${fileExt}`;
+      const { error: uploadError } = await supabase.storage.from("listing-images").upload(fileName, file);
+      if (uploadError) throw uploadError;
+
+      const { data: { publicUrl } } = supabase.storage.from("listing-images").getPublicUrl(fileName);
+      setVerificationDocUrl(publicUrl);
+      toast.success("Verification document uploaded");
+    } catch (err: any) {
+      console.error("Verification doc upload failed:", err);
+      toast.error(err.message || "Failed to upload document");
+    } finally {
+      setIsUploadingDoc(false);
     }
-    const { data: { publicUrl } } = supabase.storage.from("listing-images").getPublicUrl(fileName);
-    return publicUrl;
   };
 
   const validateInitialForm = (): boolean => {
-    if (!formData.title.trim() || !formData.price || parseFloat(formData.price) <= 0 || !formData.district || images.length === 0 || !agreedToTerms) {
+    if (!formData.title.trim() || !formData.price || parseFloat(formData.price) <= 0 || !formData.district || uploadedImageUrls.length === 0 || !agreedToTerms) {
       toast.error("Please fill all required fields and agree to terms");
       return false;
     }
@@ -401,30 +574,26 @@ const PostAd = () => {
 
       if (listingError) throw listingError;
 
-      // Upload and associate images
-      const imageUrls = await uploadImages(listing.id);
-      for (let i = 0; i < imageUrls.length; i++) {
+      // Associate already uploaded images
+      for (let i = 0; i < uploadedImageUrls.length; i++) {
         await supabase.from("listing_images").insert({
           listing_id: listing.id,
-          image_url: imageUrls[i],
+          image_url: uploadedImageUrls[i],
           display_order: i,
         });
       }
 
-      // Upload verification doc if any and update listing attributes
-      if (verificationDoc) {
-        const docUrl = await uploadVerificationDoc(listing.id);
-        if (docUrl) {
-          const updatedAttributes = {
-            ...attributes,
-            verificationDocUrl: docUrl,
-            verificationStatus: "pending",
-          };
-          await supabase
-            .from("listings")
-            .update({ attributes: updatedAttributes })
-            .eq("id", listing.id);
-        }
+      // Attach verification doc if uploaded
+      if (verificationDocUrl) {
+        const updatedAttributes = {
+          ...attributes,
+          verificationDocUrl,
+          verificationStatus: "pending",
+        };
+        await supabase
+          .from("listings")
+          .update({ attributes: updatedAttributes })
+          .eq("id", listing.id);
       }
 
       // If popup promotion is selected, insert schedule with chosen plan, date, and slot
@@ -445,6 +614,9 @@ const PostAd = () => {
 
         if (popupError) throw popupError;
       }
+
+      // Clear saved progress on successful submission
+      localStorage.removeItem("post_ad_progress");
 
       if (postingType === "popup") {
         toast.success("Popup ad submitted! Sent to admin portal for review.");
@@ -485,7 +657,16 @@ const PostAd = () => {
     );
   };
 
-  if (loading) return <div className="min-h-screen flex items-center justify-center">Loading...</div>;
+  if (loading || isRestoringProgress) {
+    return (
+      <div className="min-h-screen flex items-center justify-center">
+        <div className="flex flex-col items-center gap-3">
+          <Loader2 className="h-8 w-8 animate-spin text-primary" />
+          <p className="text-sm text-muted-foreground">Loading...</p>
+        </div>
+      </div>
+    );
+  }
 
   const maxImages = postingType === "free" ? 1 : 6;
 
@@ -556,7 +737,7 @@ const PostAd = () => {
 
         {/* Posting Type Selection */}
         <div className="grid md:grid-cols-3 gap-6 mb-8">
-          <Card className={`p-6 cursor-pointer transition-all hover:shadow-lg ${postingType === "free" ? "border-2 border-primary shadow-md" : "border-2 border-transparent"}`} onClick={() => { setPostingType("free"); setImages([]); setImagePreviews([]); setCurrentStep("form"); }}>
+          <Card className={`p-6 cursor-pointer transition-all hover:shadow-lg ${postingType === "free" ? "border-2 border-primary shadow-md" : "border-2 border-transparent"}`} onClick={() => { setPostingType("free"); setUploadedImageUrls(prev => prev.slice(0, 1)); setImagePreviews(prev => prev.slice(0, 1)); setCurrentStep("form"); }}>
             <div className="flex items-start justify-between">
               <div className="space-y-2 flex-1">
                 <h3 className="text-xl font-bold flex items-center gap-2"><ImageIcon className="h-5 w-5" />Free</h3>
@@ -568,7 +749,7 @@ const PostAd = () => {
             </div>
           </Card>
 
-          <Card className={`p-6 cursor-pointer transition-all hover:shadow-lg relative ${postingType === "featured" ? "border-2 border-yellow-500 shadow-md" : "border-2 border-transparent"}`} onClick={() => { setPostingType("featured"); setImages([]); setImagePreviews([]); setCurrentStep("form"); }}>
+          <Card className={`p-6 cursor-pointer transition-all hover:shadow-lg relative ${postingType === "featured" ? "border-2 border-yellow-500 shadow-md" : "border-2 border-transparent"}`} onClick={() => { setPostingType("featured"); setCurrentStep("form"); }}>
             <Star className="absolute top-2 right-2 h-6 w-6 text-yellow-500 fill-yellow-500" />
             <div className="flex items-start justify-between">
               <div className="space-y-2 flex-1">
@@ -581,7 +762,7 @@ const PostAd = () => {
             </div>
           </Card>
 
-          <Card className={`p-6 cursor-pointer transition-all hover:shadow-lg relative ${postingType === "popup" ? "border-2 border-purple-500 shadow-md" : "border-2 border-transparent"}`} onClick={() => { setPostingType("popup"); setImages([]); setImagePreviews([]); setCurrentStep("form"); }}>
+          <Card className={`p-6 cursor-pointer transition-all hover:shadow-lg relative ${postingType === "popup" ? "border-2 border-purple-500 shadow-md" : "border-2 border-transparent"}`} onClick={() => { setPostingType("popup"); setCurrentStep("form"); }}>
             <Sparkles className="absolute top-2 right-2 h-6 w-6 text-purple-500" />
             <div className="flex items-start justify-between">
               <div className="space-y-2 flex-1">
@@ -753,13 +934,38 @@ const PostAd = () => {
 
             {/* Images */}
             <Card className="p-6 mb-6">
-              <h2 className="text-xl font-semibold mb-4">Upload Images * ({images.length}/{maxImages})</h2>
+              <h2 className="text-xl font-semibold mb-4">Upload Images * ({uploadedImageUrls.length}/{maxImages})</h2>
               <div className="space-y-4">
-                <div className="border-2 border-dashed rounded-lg p-8 text-center">
-                  <input type="file" id="image-upload" accept="image/*" onChange={handleImageSelect} className="hidden" disabled={images.length >= maxImages} />
-                  <label htmlFor="image-upload" className={`cursor-pointer flex flex-col items-center ${images.length >= maxImages ? 'opacity-50 cursor-not-allowed' : ''}`}>
-                    <Upload className="h-12 w-12 text-muted-foreground mb-2" />
-                    <span className="text-sm text-muted-foreground">{images.length >= maxImages ? `Max ${maxImages} reached` : `Upload (Max ${maxImages})`}</span>
+                <div className="border-2 border-dashed rounded-lg p-8 text-center relative">
+                  <input
+                    type="file"
+                    id="image-upload"
+                    accept="image/*"
+                    onChange={handleImageSelect}
+                    className="hidden"
+                    disabled={uploadedImageUrls.length >= maxImages || isUploadingImage}
+                  />
+                  <label
+                    htmlFor="image-upload"
+                    className={`cursor-pointer flex flex-col items-center ${
+                      uploadedImageUrls.length >= maxImages || isUploadingImage ? "opacity-50 cursor-not-allowed" : ""
+                    }`}
+                  >
+                    {isUploadingImage ? (
+                      <Loader2 className="h-12 w-12 text-primary animate-spin mb-2" />
+                    ) : (
+                      <Upload className="h-12 w-12 text-muted-foreground mb-2" />
+                    )}
+                    <span className="text-sm font-medium text-foreground">
+                      {isUploadingImage
+                        ? "Uploading & saving image..."
+                        : uploadedImageUrls.length >= maxImages
+                        ? `Max ${maxImages} reached`
+                        : `Upload (Max ${maxImages})`}
+                    </span>
+                    <span className="text-xs text-muted-foreground mt-1">
+                      Images are automatically cropped and securely saved
+                    </span>
                   </label>
                 </div>
                 {imagePreviews.length > 0 && (
@@ -767,7 +973,11 @@ const PostAd = () => {
                     {imagePreviews.map((preview, index) => (
                       <div key={index} className="relative group">
                         <img src={preview} alt={`Preview ${index + 1}`} className="w-full h-24 object-cover rounded-lg shadow-md" />
-                        <button onClick={() => removeImage(index)} className="absolute top-1 right-1 bg-destructive text-destructive-foreground rounded-full p-1 opacity-0 group-hover:opacity-100 transition-opacity">
+                        <button
+                          type="button"
+                          onClick={() => removeImage(index)}
+                          className="absolute top-1 right-1 bg-destructive text-destructive-foreground rounded-full p-1 opacity-0 group-hover:opacity-100 transition-opacity"
+                        >
                           <X className="h-4 w-4" />
                         </button>
                       </div>
@@ -789,23 +999,29 @@ const PostAd = () => {
                     type="file" 
                     id="doc-upload" 
                     accept=".pdf,image/*" 
-                    onChange={(e) => {
-                      const file = e.target.files?.[0];
-                      if (file) {
-                        setVerificationDoc(file);
-                        setVerificationDocName(file.name);
-                      }
-                    }} 
+                    onChange={handleVerificationDocSelect} 
                     className="hidden" 
+                    disabled={isUploadingDoc}
                   />
-                  <label htmlFor="doc-upload" className="cursor-pointer flex flex-col items-center">
-                    <Upload className="h-8 w-8 text-muted-foreground mb-2" />
+                  <label
+                    htmlFor="doc-upload"
+                    className={`cursor-pointer flex flex-col items-center ${isUploadingDoc ? 'opacity-50 cursor-not-allowed' : ''}`}
+                  >
+                    {isUploadingDoc ? (
+                      <Loader2 className="h-8 w-8 text-primary animate-spin mb-2" />
+                    ) : (
+                      <Upload className="h-8 w-8 text-muted-foreground mb-2" />
+                    )}
                     <span className="text-sm font-medium text-foreground">
-                      {verificationDocName ? `Selected: ${verificationDocName}` : "Choose PDF or Image"}
+                      {isUploadingDoc
+                        ? "Uploading document..."
+                        : verificationDocName
+                        ? `Uploaded: ${verificationDocName}`
+                        : "Choose PDF or Image"}
                     </span>
                     <span className="text-xs text-muted-foreground mt-1">Optional, max 10MB</span>
                   </label>
-                  {verificationDoc && (
+                  {(verificationDocName || verificationDocUrl) && (
                     <Button 
                       type="button" 
                       variant="ghost" 
@@ -813,6 +1029,7 @@ const PostAd = () => {
                       onClick={() => {
                         setVerificationDoc(null);
                         setVerificationDocName("");
+                        setVerificationDocUrl(null);
                       }} 
                       className="absolute top-2 right-2 text-destructive hover:bg-destructive/10"
                     >
