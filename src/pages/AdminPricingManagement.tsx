@@ -34,6 +34,7 @@ export interface AdPlan {
   name: string;
   duration_days: number;
   price: number;
+  display_price?: string | null;
 }
 
 interface PricingPlan {
@@ -137,9 +138,10 @@ const AdminPricingManagement = () => {
             id: row?.id,
             ad_type: "featured",
             plan_tier: tier,
-            name: row?.display_price && isNaN(Number(row.display_price)) && row.display_price.trim() !== "0" && !row.display_price.startsWith("₹") ? row.display_price : `Plan ${tier}`,
+            name: `Plan ${tier}`,
             duration_days: row ? Number(row.duration) : (tier === 1 ? 30 : tier === 2 ? 60 : 90),
-            price: row ? Number(row.price) : (tier === 1 ? 199 : tier === 2 ? 349 : 500)
+            price: row ? Number(row.price) : (tier === 1 ? 199 : tier === 2 ? 349 : 500),
+            display_price: row?.display_price || ""
           };
         }));
 
@@ -153,9 +155,10 @@ const AdminPricingManagement = () => {
             id: row?.id,
             ad_type: "popup",
             plan_tier: tier,
-            name: row?.display_price && isNaN(Number(row.display_price)) && row.display_price.trim() !== "0" && !row.display_price.startsWith("₹") ? row.display_price : `Plan ${tier}`,
+            name: `Plan ${tier}`,
             duration_days: row ? Number(row.duration) : (tier === 1 ? 30 : tier === 2 ? 60 : 90),
-            price: row ? Number(row.price) : (tier === 1 ? 999 : tier === 2 ? 1499 : 1999)
+            price: row ? Number(row.price) : (tier === 1 ? 999 : tier === 2 ? 1499 : 1999),
+            display_price: row?.display_price || ""
           };
         }));
       }
@@ -170,6 +173,7 @@ const AdminPricingManagement = () => {
     try {
       const planType = `${plan.ad_type}_${plan.duration_days}`;
       const displayOrder = plan.ad_type === "featured" ? plan.plan_tier : plan.plan_tier + 3;
+      const displayPriceValue = plan.display_price && String(plan.display_price).trim() !== "" ? String(plan.display_price).trim() : null;
 
       if (plan.id) {
         const { error } = await supabase
@@ -177,7 +181,7 @@ const AdminPricingManagement = () => {
           .update({
             duration: Number(plan.duration_days),
             price: Number(plan.price),
-            display_price: plan.name,
+            display_price: displayPriceValue,
             updated_at: new Date().toISOString()
           })
           .eq("id", plan.id);
@@ -190,7 +194,7 @@ const AdminPricingManagement = () => {
             plan_type: planType,
             duration: Number(plan.duration_days),
             price: Number(plan.price),
-            display_price: plan.name,
+            display_price: displayPriceValue,
             display_order: displayOrder,
             updated_at: new Date().toISOString()
           }, { onConflict: "plan_type" });
@@ -345,7 +349,8 @@ const AdminPricingManagement = () => {
                   <TableHead className="w-24">Tier</TableHead>
                   <TableHead>Plan Name</TableHead>
                   <TableHead className="w-36">Duration (Days)</TableHead>
-                  <TableHead className="w-36">Price (₹)</TableHead>
+                  <TableHead className="w-32">Price (₹)</TableHead>
+                  <TableHead className="w-36">Display Price (₹)</TableHead>
                   <TableHead className="text-right w-28">Action</TableHead>
                 </TableRow>
               </TableHeader>
@@ -390,6 +395,17 @@ const AdminPricingManagement = () => {
                           setFeaturedPlans(updated);
                         }}
                         placeholder="Price"
+                      />
+                    </TableCell>
+                    <TableCell>
+                      <Input
+                        value={plan.display_price || ""}
+                        onChange={(e) => {
+                          const updated = [...featuredPlans];
+                          updated[idx] = { ...updated[idx], display_price: e.target.value };
+                          setFeaturedPlans(updated);
+                        }}
+                        placeholder="e.g. 50"
                       />
                     </TableCell>
                     <TableCell className="text-right">
@@ -438,7 +454,8 @@ const AdminPricingManagement = () => {
                   <TableHead className="w-24">Tier</TableHead>
                   <TableHead>Plan Name</TableHead>
                   <TableHead className="w-36">Duration (Days)</TableHead>
-                  <TableHead className="w-36">Price (₹)</TableHead>
+                  <TableHead className="w-32">Price (₹)</TableHead>
+                  <TableHead className="w-36">Display Price (₹)</TableHead>
                   <TableHead className="text-right w-28">Action</TableHead>
                 </TableRow>
               </TableHeader>
@@ -483,6 +500,17 @@ const AdminPricingManagement = () => {
                           setPopupPlans(updated);
                         }}
                         placeholder="Price"
+                      />
+                    </TableCell>
+                    <TableCell>
+                      <Input
+                        value={plan.display_price || ""}
+                        onChange={(e) => {
+                          const updated = [...popupPlans];
+                          updated[idx] = { ...updated[idx], display_price: e.target.value };
+                          setPopupPlans(updated);
+                        }}
+                        placeholder="e.g. 50"
                       />
                     </TableCell>
                     <TableCell className="text-right">

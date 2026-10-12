@@ -27,6 +27,8 @@ export interface AdPlan {
   name: string;
   duration_days: number;
   price: number;
+  original_price?: number;
+  has_display_price?: boolean;
 }
 
 const PostAd = () => {
@@ -139,31 +141,36 @@ const PostAd = () => {
               .filter(p => p.plan_type.startsWith("featured_"))
               .sort((a, b) => a.display_order - b.display_order);
 
-            const popupRows = plansData
-              .filter(p => p.plan_type.startsWith("popup_"))
-              .sort((a, b) => a.display_order - b.display_order);
+            const parsePrice = (val: any): number | null => {
+              if (val === null || val === undefined) return null;
+              const str = String(val).trim();
+              if (!str) return null;
+              const cleaned = str.replace(/[^0-9.]/g, "");
+              if (!cleaned) return null;
+              const num = parseFloat(cleaned);
+              return isNaN(num) ? null : num;
+            };
 
-            const mappedFeatured: AdPlan[] = featuredRows.map((row, idx) => ({
-              id: row.id,
-              ad_type: "featured",
-              plan_tier: idx + 1,
-              name: row.display_price && isNaN(Number(row.display_price)) && row.display_price.trim() !== "0" && !row.display_price.startsWith("₹")
-                ? row.display_price
-                : `Plan ${idx + 1}`,
-              duration_days: Number(row.duration),
-              price: Number(row.price),
-            }));
+            const mapRowToPlan = (row: any, idx: number, adType: "featured" | "popup"): AdPlan => {
+              const originalPrice = Number(row.price);
+              const displayPriceParsed = parsePrice(row.display_price);
+              const hasDisplayPrice = displayPriceParsed !== null && row.display_price !== null && String(row.display_price).trim() !== "";
+              const activePrice = hasDisplayPrice ? displayPriceParsed! : originalPrice;
 
-            const mappedPopup: AdPlan[] = popupRows.map((row, idx) => ({
-              id: row.id,
-              ad_type: "popup",
-              plan_tier: idx + 1,
-              name: row.display_price && isNaN(Number(row.display_price)) && row.display_price.trim() !== "0" && !row.display_price.startsWith("₹")
-                ? row.display_price
-                : `Plan ${idx + 1}`,
-              duration_days: Number(row.duration),
-              price: Number(row.price),
-            }));
+              return {
+                id: row.id,
+                ad_type: adType,
+                plan_tier: idx + 1,
+                name: `Plan ${idx + 1}`,
+                duration_days: Number(row.duration),
+                price: activePrice,
+                original_price: originalPrice,
+                has_display_price: hasDisplayPrice,
+              };
+            };
+
+            const mappedFeatured: AdPlan[] = featuredRows.map((row, idx) => mapRowToPlan(row, idx, "featured"));
+            const mappedPopup: AdPlan[] = popupRows.map((row, idx) => mapRowToPlan(row, idx, "popup"));
 
             freshPlans = [...mappedFeatured, ...mappedPopup];
             setAdPlans(freshPlans);
@@ -295,27 +302,36 @@ const PostAd = () => {
           .filter(p => p.plan_type.startsWith("popup_"))
           .sort((a, b) => a.display_order - b.display_order);
 
-        const mappedFeatured: AdPlan[] = featuredRows.map((row, idx) => ({
-          id: row.id,
-          ad_type: "featured",
-          plan_tier: idx + 1,
-          name: row.display_price && isNaN(Number(row.display_price)) && row.display_price.trim() !== "0" && !row.display_price.startsWith("₹")
-            ? row.display_price
-            : `Plan ${idx + 1}`,
-          duration_days: Number(row.duration),
-          price: Number(row.price),
-        }));
+        const parsePrice = (val: any): number | null => {
+          if (val === null || val === undefined) return null;
+          const str = String(val).trim();
+          if (!str) return null;
+          const cleaned = str.replace(/[^0-9.]/g, "");
+          if (!cleaned) return null;
+          const num = parseFloat(cleaned);
+          return isNaN(num) ? null : num;
+        };
 
-        const mappedPopup: AdPlan[] = popupRows.map((row, idx) => ({
-          id: row.id,
-          ad_type: "popup",
-          plan_tier: idx + 1,
-          name: row.display_price && isNaN(Number(row.display_price)) && row.display_price.trim() !== "0" && !row.display_price.startsWith("₹")
-            ? row.display_price
-            : `Plan ${idx + 1}`,
-          duration_days: Number(row.duration),
-          price: Number(row.price),
-        }));
+        const mapRowToPlan = (row: any, idx: number, adType: "featured" | "popup"): AdPlan => {
+          const originalPrice = Number(row.price);
+          const displayPriceParsed = parsePrice(row.display_price);
+          const hasDisplayPrice = displayPriceParsed !== null && row.display_price !== null && String(row.display_price).trim() !== "";
+          const activePrice = hasDisplayPrice ? displayPriceParsed! : originalPrice;
+
+          return {
+            id: row.id,
+            ad_type: adType,
+            plan_tier: idx + 1,
+            name: `Plan ${idx + 1}`,
+            duration_days: Number(row.duration),
+            price: activePrice,
+            original_price: originalPrice,
+            has_display_price: hasDisplayPrice,
+          };
+        };
+
+        const mappedFeatured: AdPlan[] = featuredRows.map((row, idx) => mapRowToPlan(row, idx, "featured"));
+        const mappedPopup: AdPlan[] = popupRows.map((row, idx) => mapRowToPlan(row, idx, "popup"));
 
         setAdPlans([...mappedFeatured, ...mappedPopup]);
       }
@@ -1138,9 +1154,20 @@ const PostAd = () => {
                         <h3 className="text-xl font-bold">{plan.name}</h3>
                       </div>
                       <div>
-                        <div className="text-3xl font-extrabold text-foreground">
-                          ₹{plan.price}
-                        </div>
+                        {plan.has_display_price && plan.original_price !== undefined && plan.original_price !== plan.price && plan.original_price > 0 ? (
+                          <div className="flex items-baseline gap-2">
+                            <span className="text-xl font-bold text-red-500 line-through decoration-red-500">
+                              ₹{plan.original_price}
+                            </span>
+                            <span className="text-3xl font-extrabold text-foreground">
+                              ₹{plan.price}
+                            </span>
+                          </div>
+                        ) : (
+                          <div className="text-3xl font-extrabold text-foreground">
+                            ₹{plan.price}
+                          </div>
+                        )}
                         <p className="text-sm text-muted-foreground mt-1">
                           Duration: <span className="font-semibold text-foreground">{plan.duration_days} Days</span>
                         </p>
@@ -1366,7 +1393,16 @@ const PostAd = () => {
                 </div>
                 <div>
                   <span className="text-muted-foreground text-xs uppercase">Plan Fee:</span>
-                  <p className="font-bold text-lg text-primary mt-0.5">₹{selectedPlan?.price}</p>
+                  <div className="mt-0.5">
+                    {selectedPlan?.has_display_price && selectedPlan?.original_price !== undefined && selectedPlan?.original_price !== selectedPlan?.price && selectedPlan?.original_price > 0 ? (
+                      <div className="flex items-baseline gap-2">
+                        <span className="text-sm font-semibold text-red-500 line-through">₹{selectedPlan.original_price}</span>
+                        <span className="font-bold text-lg text-primary">₹{selectedPlan.price}</span>
+                      </div>
+                    ) : (
+                      <p className="font-bold text-lg text-primary">₹{selectedPlan?.price}</p>
+                    )}
+                  </div>
                 </div>
                 <div>
                   <span className="text-muted-foreground text-xs uppercase">{postingType === "popup" ? "Popup Date:" : "Start Date:"}</span>
