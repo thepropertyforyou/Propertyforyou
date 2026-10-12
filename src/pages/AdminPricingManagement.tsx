@@ -4,9 +4,8 @@ import { supabase } from "@/integrations/supabase/client";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
 import { toast } from "sonner";
-import { Save, Plus, Trash2, Star, Sparkles, Loader2 } from "lucide-react";
+import { Save, Star, Sparkles, Loader2 } from "lucide-react";
 import { useAuth } from "@/hooks/useAuth";
 import AdminLayout from "@/components/admin/AdminLayout";
 import { Badge } from "@/components/ui/badge";
@@ -18,14 +17,6 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
-import {
-  Dialog,
-  DialogContent,
-  DialogDescription,
-  DialogHeader,
-  DialogTitle,
-  DialogFooter,
-} from "@/components/ui/dialog";
 
 export interface AdPlan {
   id?: string;
@@ -37,41 +28,22 @@ export interface AdPlan {
   display_price?: string | null;
 }
 
-interface PricingPlan {
-  id: string;
-  plan_type: string;
-  duration: number;
-  price: number;
-  display_order: number;
-  display_price: string | null;
-}
-
 const AdminPricingManagement = () => {
   const navigate = useNavigate();
   const { user, loading: authLoading } = useAuth();
-  const [plans, setPlans] = useState<PricingPlan[]>([]);
   const [loading, setLoading] = useState(true);
   const [isAdmin, setIsAdmin] = useState(false);
-  const [editingPlan, setEditingPlan] = useState<PricingPlan | null>(null);
-  const [showAddDialog, setShowAddDialog] = useState(false);
-  const [newPlan, setNewPlan] = useState({
-    plan_type: "",
-    duration: 30,
-    price: 0,
-    display_order: 0,
-    display_price: "",
-  });
 
   // Dedicated 3 plans for Featured and Popup ads
   const [featuredPlans, setFeaturedPlans] = useState<AdPlan[]>([
-    { ad_type: "featured", plan_tier: 1, name: "Plan 1", duration_days: 7, price: 199 },
-    { ad_type: "featured", plan_tier: 2, name: "Plan 2", duration_days: 15, price: 349 },
-    { ad_type: "featured", plan_tier: 3, name: "Plan 3", duration_days: 30, price: 499 },
+    { ad_type: "featured", plan_tier: 1, name: "Plan 1", duration_days: 30, price: 0, display_price: "" },
+    { ad_type: "featured", plan_tier: 2, name: "Plan 2", duration_days: 60, price: 350, display_price: "" },
+    { ad_type: "featured", plan_tier: 3, name: "Plan 3", duration_days: 90, price: 500, display_price: "" },
   ]);
   const [popupPlans, setPopupPlans] = useState<AdPlan[]>([
-    { ad_type: "popup", plan_tier: 1, name: "Plan 1", duration_days: 1, price: 199 },
-    { ad_type: "popup", plan_tier: 2, name: "Plan 2", duration_days: 3, price: 499 },
-    { ad_type: "popup", plan_tier: 3, name: "Plan 3", duration_days: 7, price: 999 },
+    { ad_type: "popup", plan_tier: 1, name: "Plan 1", duration_days: 30, price: 999, display_price: "" },
+    { ad_type: "popup", plan_tier: 2, name: "Plan 2", duration_days: 60, price: 1499, display_price: "" },
+    { ad_type: "popup", plan_tier: 3, name: "Plan 3", duration_days: 90, price: 1999, display_price: "" },
   ]);
   const [savingPlanKey, setSavingPlanKey] = useState<string | null>(null);
 
@@ -83,7 +55,6 @@ const AdminPricingManagement = () => {
 
   useEffect(() => {
     if (isAdmin) {
-      fetchPlans();
       fetchAdPlans();
     }
   }, [isAdmin]);
@@ -134,14 +105,15 @@ const AdminPricingManagement = () => {
 
         setFeaturedPlans([1, 2, 3].map(tier => {
           const row = featuredRows[tier - 1];
+          const hasNumericDisplay = row?.display_price !== null && row?.display_price !== undefined && !isNaN(Number(row.display_price));
           return {
             id: row?.id,
             ad_type: "featured",
             plan_tier: tier,
-            name: `Plan ${tier}`,
+            name: row?.plan_name || (row?.display_price && isNaN(Number(row.display_price)) && !row.display_price.startsWith("₹") ? row.display_price : `Plan ${tier}`),
             duration_days: row ? Number(row.duration) : (tier === 1 ? 30 : tier === 2 ? 60 : 90),
-            price: row ? Number(row.price) : (tier === 1 ? 199 : tier === 2 ? 349 : 500),
-            display_price: row?.display_price || ""
+            price: row ? Number(row.price) : (tier === 1 ? 0 : tier === 2 ? 350 : 500),
+            display_price: hasNumericDisplay ? String(row.display_price) : ""
           };
         }));
 
@@ -151,19 +123,22 @@ const AdminPricingManagement = () => {
 
         setPopupPlans([1, 2, 3].map(tier => {
           const row = popupRows[tier - 1];
+          const hasNumericDisplay = row?.display_price !== null && row?.display_price !== undefined && !isNaN(Number(row.display_price));
           return {
             id: row?.id,
             ad_type: "popup",
             plan_tier: tier,
-            name: `Plan ${tier}`,
+            name: row?.plan_name || (row?.display_price && isNaN(Number(row.display_price)) && !row.display_price.startsWith("₹") ? row.display_price : `Plan ${tier}`),
             duration_days: row ? Number(row.duration) : (tier === 1 ? 30 : tier === 2 ? 60 : 90),
             price: row ? Number(row.price) : (tier === 1 ? 999 : tier === 2 ? 1499 : 1999),
-            display_price: row?.display_price || ""
+            display_price: hasNumericDisplay ? String(row.display_price) : ""
           };
         }));
       }
     } catch (err) {
       console.error("Error fetching ad plans from pricing_plans:", err);
+    } finally {
+      setLoading(false);
     }
   };
 
@@ -173,130 +148,58 @@ const AdminPricingManagement = () => {
     try {
       const planType = `${plan.ad_type}_${plan.duration_days}`;
       const displayOrder = plan.ad_type === "featured" ? plan.plan_tier : plan.plan_tier + 3;
-      const displayPriceValue = plan.display_price && String(plan.display_price).trim() !== "" ? String(plan.display_price).trim() : null;
+      const displayPriceValue = plan.display_price !== undefined && plan.display_price !== null && String(plan.display_price).trim() !== ""
+        ? String(plan.display_price).trim()
+        : null;
+
+      const payload: any = {
+        duration: Number(plan.duration_days),
+        price: Number(plan.price),
+        display_price: displayPriceValue,
+        plan_name: plan.name,
+        updated_at: new Date().toISOString()
+      };
 
       if (plan.id) {
-        const { error } = await supabase
+        let { error } = await supabase
           .from("pricing_plans")
-          .update({
-            duration: Number(plan.duration_days),
-            price: Number(plan.price),
-            display_price: displayPriceValue,
-            updated_at: new Date().toISOString()
-          })
+          .update(payload)
           .eq("id", plan.id);
+
+        if (error && error.message?.includes("plan_name")) {
+          delete payload.plan_name;
+          const retry = await supabase.from("pricing_plans").update(payload).eq("id", plan.id);
+          error = retry.error;
+        }
 
         if (error) throw error;
       } else {
-        const { error } = await supabase
+        const upsertPayload: any = {
+          plan_type: planType,
+          ...payload,
+          display_order: displayOrder,
+        };
+
+        let { error } = await supabase
           .from("pricing_plans")
-          .upsert({
-            plan_type: planType,
-            duration: Number(plan.duration_days),
-            price: Number(plan.price),
-            display_price: displayPriceValue,
-            display_order: displayOrder,
-            updated_at: new Date().toISOString()
-          }, { onConflict: "plan_type" });
+          .upsert(upsertPayload, { onConflict: "plan_type" });
+
+        if (error && error.message?.includes("plan_name")) {
+          delete upsertPayload.plan_name;
+          const retry = await supabase.from("pricing_plans").upsert(upsertPayload, { onConflict: "plan_type" });
+          error = retry.error;
+        }
 
         if (error) throw error;
       }
 
       toast.success(`${plan.name} (${plan.ad_type.toUpperCase()}) saved successfully!`);
       fetchAdPlans();
-      fetchPlans();
     } catch (error: any) {
       console.error("Error saving ad plan to pricing_plans:", error);
       toast.error(error.message || "Failed to save plan to pricing_plans");
     } finally {
       setSavingPlanKey(null);
-    }
-  };
-
-  const fetchPlans = async () => {
-    try {
-      const { data, error } = await supabase
-        .from("pricing_plans")
-        .select("*")
-        .order("display_order", { ascending: true });
-
-      if (error) throw error;
-      setPlans(data || []);
-    } catch (error) {
-      console.error("Error fetching plans:", error);
-      toast.error("Failed to fetch pricing plans");
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  const handleSave = async (plan: PricingPlan) => {
-    try {
-      const { error } = await supabase
-        .from("pricing_plans")
-        .update({
-          duration: plan.duration,
-          price: plan.price,
-          display_price: plan.display_price,
-        })
-        .eq("id", plan.id);
-
-      if (error) throw error;
-
-      toast.success("Pricing plan updated successfully");
-      setEditingPlan(null);
-      fetchPlans();
-    } catch (error) {
-      console.error("Error updating plan:", error);
-      toast.error("Failed to update pricing plan");
-    }
-  };
-
-  const handleAdd = async () => {
-    if (!newPlan.plan_type || newPlan.duration <= 0 || newPlan.price < 0) {
-      toast.error("Please fill all fields with valid values");
-      return;
-    }
-
-    try {
-      const { error } = await supabase
-        .from("pricing_plans")
-        .insert({
-          plan_type: newPlan.plan_type,
-          duration: newPlan.duration,
-          price: newPlan.price,
-          display_order: newPlan.display_order,
-          display_price: newPlan.display_price || null,
-        });
-
-      if (error) throw error;
-
-      toast.success("New pricing plan added successfully");
-      setShowAddDialog(false);
-      setNewPlan({ plan_type: "", duration: 30, price: 0, display_order: 0, display_price: "" });
-      fetchPlans();
-    } catch (error) {
-      console.error("Error adding plan:", error);
-      toast.error("Failed to add pricing plan");
-    }
-  };
-
-  const handleDelete = async (id: string) => {
-    if (!confirm("Are you sure you want to delete this pricing plan?")) return;
-
-    try {
-      const { error } = await supabase
-        .from("pricing_plans")
-        .delete()
-        .eq("id", id);
-
-      if (error) throw error;
-
-      toast.success("Pricing plan deleted successfully");
-      fetchPlans();
-    } catch (error) {
-      console.error("Error deleting plan:", error);
-      toast.error("Failed to delete pricing plan");
     }
   };
 
@@ -317,13 +220,9 @@ const AdminPricingManagement = () => {
           <div>
             <h1 className="text-3xl font-bold text-foreground">Pricing Management</h1>
             <p className="text-muted-foreground mt-1">
-              Manage pricing plans for featured listings and popup ads
+              Configure pricing plans and promotional display prices for featured listings and popup ads
             </p>
           </div>
-          <Button onClick={() => setShowAddDialog(true)}>
-            <Plus className="h-4 w-4 mr-2" />
-            Add New Plan
-          </Button>
         </div>
 
         {/* Featured Ad Plans (Plan 1, Plan 2, Plan 3) */}
@@ -346,12 +245,12 @@ const AdminPricingManagement = () => {
             <Table>
               <TableHeader>
                 <TableRow>
-                  <TableHead className="w-24">Tier</TableHead>
+                  <TableHead className="w-20">Tier</TableHead>
                   <TableHead>Plan Name</TableHead>
-                  <TableHead className="w-36">Duration (Days)</TableHead>
+                  <TableHead className="w-32">Duration (Days)</TableHead>
                   <TableHead className="w-32">Price (₹)</TableHead>
                   <TableHead className="w-36">Display Price (₹)</TableHead>
-                  <TableHead className="text-right w-28">Action</TableHead>
+                  <TableHead className="text-right w-24">Action</TableHead>
                 </TableRow>
               </TableHeader>
               <TableBody>
@@ -399,13 +298,15 @@ const AdminPricingManagement = () => {
                     </TableCell>
                     <TableCell>
                       <Input
-                        value={plan.display_price || ""}
+                        type="number"
+                        min="0"
+                        value={plan.display_price ?? ""}
                         onChange={(e) => {
                           const updated = [...featuredPlans];
                           updated[idx] = { ...updated[idx], display_price: e.target.value };
                           setFeaturedPlans(updated);
                         }}
-                        placeholder="e.g. 50"
+                        placeholder="Optional"
                       />
                     </TableCell>
                     <TableCell className="text-right">
@@ -451,12 +352,12 @@ const AdminPricingManagement = () => {
             <Table>
               <TableHeader>
                 <TableRow>
-                  <TableHead className="w-24">Tier</TableHead>
+                  <TableHead className="w-20">Tier</TableHead>
                   <TableHead>Plan Name</TableHead>
-                  <TableHead className="w-36">Duration (Days)</TableHead>
+                  <TableHead className="w-32">Duration (Days)</TableHead>
                   <TableHead className="w-32">Price (₹)</TableHead>
                   <TableHead className="w-36">Display Price (₹)</TableHead>
-                  <TableHead className="text-right w-28">Action</TableHead>
+                  <TableHead className="text-right w-24">Action</TableHead>
                 </TableRow>
               </TableHeader>
               <TableBody>
@@ -504,13 +405,15 @@ const AdminPricingManagement = () => {
                     </TableCell>
                     <TableCell>
                       <Input
-                        value={plan.display_price || ""}
+                        type="number"
+                        min="0"
+                        value={plan.display_price ?? ""}
                         onChange={(e) => {
                           const updated = [...popupPlans];
                           updated[idx] = { ...updated[idx], display_price: e.target.value };
                           setPopupPlans(updated);
                         }}
-                        placeholder="e.g. 50"
+                        placeholder="Optional"
                       />
                     </TableCell>
                     <TableCell className="text-right">
@@ -535,191 +438,7 @@ const AdminPricingManagement = () => {
             </Table>
           </CardContent>
         </Card>
-
-        <Card>
-          <CardHeader>
-            <CardTitle>Pricing Plans</CardTitle>
-            <CardDescription>
-              Update prices and durations for all plans. Changes apply immediately.
-            </CardDescription>
-          </CardHeader>
-          <CardContent>
-            <Table>
-              <TableHeader>
-                <TableRow>
-                  <TableHead>Plan Type</TableHead>
-                  <TableHead>Duration (days)</TableHead>
-                  <TableHead>Price (₹)</TableHead>
-                  <TableHead>Display Price</TableHead>
-                  <TableHead className="text-right">Actions</TableHead>
-                </TableRow>
-              </TableHeader>
-              <TableBody>
-                {plans.map((plan) => (
-                  <TableRow key={plan.id}>
-                    <TableCell className="font-medium">
-                      {plan.plan_type.replace(/_/g, " ").toUpperCase()}
-                    </TableCell>
-                    <TableCell>
-                      {editingPlan?.id === plan.id ? (
-                        <Input
-                          type="number"
-                          value={editingPlan.duration}
-                          onChange={(e) =>
-                            setEditingPlan({ ...editingPlan, duration: parseInt(e.target.value) })
-                          }
-                          className="w-24"
-                        />
-                      ) : (
-                        plan.duration
-                      )}
-                    </TableCell>
-                    <TableCell>
-                      {editingPlan?.id === plan.id ? (
-                        <Input
-                          type="number"
-                          value={editingPlan.price}
-                          onChange={(e) =>
-                            setEditingPlan({ ...editingPlan, price: parseFloat(e.target.value) })
-                          }
-                          className="w-24"
-                        />
-                      ) : (
-                        `₹${plan.price}`
-                      )}
-                    </TableCell>
-                    <TableCell>
-                      {editingPlan?.id === plan.id ? (
-                        <Input
-                          type="text"
-                          value={editingPlan.display_price || ""}
-                          onChange={(e) =>
-                            setEditingPlan({ ...editingPlan, display_price: e.target.value })
-                          }
-                          placeholder="e.g. ₹499 → ₹0"
-                          className="w-40"
-                        />
-                      ) : (
-                        plan.display_price || `₹${plan.price}`
-                      )}
-                    </TableCell>
-                    <TableCell className="text-right">
-                      {editingPlan?.id === plan.id ? (
-                        <div className="flex justify-end gap-2">
-                          <Button size="sm" onClick={() => handleSave(editingPlan)}>
-                            <Save className="h-4 w-4" />
-                          </Button>
-                          <Button
-                            size="sm"
-                            variant="outline"
-                            onClick={() => setEditingPlan(null)}
-                          >
-                            Cancel
-                          </Button>
-                        </div>
-                      ) : (
-                        <div className="flex justify-end gap-2">
-                          <Button
-                            size="sm"
-                            variant="outline"
-                            onClick={() => setEditingPlan(plan)}
-                          >
-                            Edit
-                          </Button>
-                          <Button
-                            size="sm"
-                            variant="destructive"
-                            onClick={() => handleDelete(plan.id)}
-                          >
-                            <Trash2 className="h-4 w-4" />
-                          </Button>
-                        </div>
-                      )}
-                    </TableCell>
-                  </TableRow>
-                ))}
-              </TableBody>
-            </Table>
-          </CardContent>
-        </Card>
       </div>
-
-      {/* Add New Plan Dialog */}
-      <Dialog open={showAddDialog} onOpenChange={setShowAddDialog}>
-        <DialogContent>
-          <DialogHeader>
-            <DialogTitle>Add New Pricing Plan</DialogTitle>
-            <DialogDescription>
-              Create a new pricing plan for featured listings or popup ads
-            </DialogDescription>
-          </DialogHeader>
-          <div className="space-y-4 py-4">
-            <div className="space-y-2">
-              <Label htmlFor="plan_type">Plan Type</Label>
-              <Input
-                id="plan_type"
-                value={newPlan.plan_type}
-                onChange={(e) => setNewPlan({ ...newPlan, plan_type: e.target.value })}
-                placeholder="e.g., featured_120 or popup_120"
-              />
-            </div>
-            <div className="space-y-2">
-              <Label htmlFor="duration">Duration (days)</Label>
-              <Input
-                id="duration"
-                type="number"
-                value={newPlan.duration}
-                onChange={(e) =>
-                  setNewPlan({ ...newPlan, duration: parseInt(e.target.value) })
-                }
-                placeholder="30"
-              />
-            </div>
-            <div className="space-y-2">
-              <Label htmlFor="price">Price (₹)</Label>
-              <Input
-                id="price"
-                type="number"
-                value={newPlan.price}
-                onChange={(e) =>
-                  setNewPlan({ ...newPlan, price: parseFloat(e.target.value) })
-                }
-                placeholder="199"
-              />
-            </div>
-            <div className="space-y-2">
-              <Label htmlFor="display_price">Display Price (text)</Label>
-              <Input
-                id="display_price"
-                type="text"
-                value={newPlan.display_price}
-                onChange={(e) =>
-                  setNewPlan({ ...newPlan, display_price: e.target.value })
-                }
-                placeholder="e.g., Free or ₹499 → ₹0"
-              />
-            </div>
-            <div className="space-y-2">
-              <Label htmlFor="display_order">Display Order</Label>
-              <Input
-                id="display_order"
-                type="number"
-                value={newPlan.display_order}
-                onChange={(e) =>
-                  setNewPlan({ ...newPlan, display_order: parseInt(e.target.value) })
-                }
-                placeholder="0"
-              />
-            </div>
-          </div>
-          <DialogFooter>
-            <Button variant="outline" onClick={() => setShowAddDialog(false)}>
-              Cancel
-            </Button>
-            <Button onClick={handleAdd}>Add Plan</Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
     </AdminLayout>
   );
 };

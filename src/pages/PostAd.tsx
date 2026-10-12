@@ -27,8 +27,7 @@ export interface AdPlan {
   name: string;
   duration_days: number;
   price: number;
-  original_price?: number;
-  has_display_price?: boolean;
+  display_price?: string | null;
 }
 
 const PostAd = () => {
@@ -141,36 +140,39 @@ const PostAd = () => {
               .filter(p => p.plan_type.startsWith("featured_"))
               .sort((a, b) => a.display_order - b.display_order);
 
-            const parsePrice = (val: any): number | null => {
-              if (val === null || val === undefined) return null;
-              const str = String(val).trim();
-              if (!str) return null;
-              const cleaned = str.replace(/[^0-9.]/g, "");
-              if (!cleaned) return null;
-              const num = parseFloat(cleaned);
-              return isNaN(num) ? null : num;
-            };
+            const popupRows = plansData
+              .filter(p => p.plan_type.startsWith("popup_"))
+              .sort((a, b) => a.display_order - b.display_order);
 
-            const mapRowToPlan = (row: any, idx: number, adType: "featured" | "popup"): AdPlan => {
-              const originalPrice = Number(row.price);
-              const displayPriceParsed = parsePrice(row.display_price);
-              const hasDisplayPrice = displayPriceParsed !== null && row.display_price !== null && String(row.display_price).trim() !== "";
-              const activePrice = hasDisplayPrice ? displayPriceParsed! : originalPrice;
-
+            const mappedFeatured: AdPlan[] = featuredRows.map((row, idx) => {
+              const hasNumericDisplay = row.display_price !== null && row.display_price !== undefined && !isNaN(Number(row.display_price));
               return {
                 id: row.id,
-                ad_type: adType,
+                ad_type: "featured",
                 plan_tier: idx + 1,
-                name: `Plan ${idx + 1}`,
+                name: row.plan_name || (row.display_price && isNaN(Number(row.display_price)) && row.display_price.trim() !== "0" && !row.display_price.startsWith("₹")
+                  ? row.display_price
+                  : `Plan ${idx + 1}`),
                 duration_days: Number(row.duration),
-                price: activePrice,
-                original_price: originalPrice,
-                has_display_price: hasDisplayPrice,
+                price: Number(row.price),
+                display_price: hasNumericDisplay ? String(row.display_price) : null,
               };
-            };
+            });
 
-            const mappedFeatured: AdPlan[] = featuredRows.map((row, idx) => mapRowToPlan(row, idx, "featured"));
-            const mappedPopup: AdPlan[] = popupRows.map((row, idx) => mapRowToPlan(row, idx, "popup"));
+            const mappedPopup: AdPlan[] = popupRows.map((row, idx) => {
+              const hasNumericDisplay = row.display_price !== null && row.display_price !== undefined && !isNaN(Number(row.display_price));
+              return {
+                id: row.id,
+                ad_type: "popup",
+                plan_tier: idx + 1,
+                name: row.plan_name || (row.display_price && isNaN(Number(row.display_price)) && row.display_price.trim() !== "0" && !row.display_price.startsWith("₹")
+                  ? row.display_price
+                  : `Plan ${idx + 1}`),
+                duration_days: Number(row.duration),
+                price: Number(row.price),
+                display_price: hasNumericDisplay ? String(row.display_price) : null,
+              };
+            });
 
             freshPlans = [...mappedFeatured, ...mappedPopup];
             setAdPlans(freshPlans);
@@ -302,36 +304,35 @@ const PostAd = () => {
           .filter(p => p.plan_type.startsWith("popup_"))
           .sort((a, b) => a.display_order - b.display_order);
 
-        const parsePrice = (val: any): number | null => {
-          if (val === null || val === undefined) return null;
-          const str = String(val).trim();
-          if (!str) return null;
-          const cleaned = str.replace(/[^0-9.]/g, "");
-          if (!cleaned) return null;
-          const num = parseFloat(cleaned);
-          return isNaN(num) ? null : num;
-        };
-
-        const mapRowToPlan = (row: any, idx: number, adType: "featured" | "popup"): AdPlan => {
-          const originalPrice = Number(row.price);
-          const displayPriceParsed = parsePrice(row.display_price);
-          const hasDisplayPrice = displayPriceParsed !== null && row.display_price !== null && String(row.display_price).trim() !== "";
-          const activePrice = hasDisplayPrice ? displayPriceParsed! : originalPrice;
-
+        const mappedFeatured: AdPlan[] = featuredRows.map((row, idx) => {
+          const hasNumericDisplay = row.display_price !== null && row.display_price !== undefined && !isNaN(Number(row.display_price));
           return {
             id: row.id,
-            ad_type: adType,
+            ad_type: "featured",
             plan_tier: idx + 1,
-            name: `Plan ${idx + 1}`,
+            name: row.plan_name || (row.display_price && isNaN(Number(row.display_price)) && row.display_price.trim() !== "0" && !row.display_price.startsWith("₹")
+              ? row.display_price
+              : `Plan ${idx + 1}`),
             duration_days: Number(row.duration),
-            price: activePrice,
-            original_price: originalPrice,
-            has_display_price: hasDisplayPrice,
+            price: Number(row.price),
+            display_price: hasNumericDisplay ? String(row.display_price) : null,
           };
-        };
+        });
 
-        const mappedFeatured: AdPlan[] = featuredRows.map((row, idx) => mapRowToPlan(row, idx, "featured"));
-        const mappedPopup: AdPlan[] = popupRows.map((row, idx) => mapRowToPlan(row, idx, "popup"));
+        const mappedPopup: AdPlan[] = popupRows.map((row, idx) => {
+          const hasNumericDisplay = row.display_price !== null && row.display_price !== undefined && !isNaN(Number(row.display_price));
+          return {
+            id: row.id,
+            ad_type: "popup",
+            plan_tier: idx + 1,
+            name: row.plan_name || (row.display_price && isNaN(Number(row.display_price)) && row.display_price.trim() !== "0" && !row.display_price.startsWith("₹")
+              ? row.display_price
+              : `Plan ${idx + 1}`),
+            duration_days: Number(row.duration),
+            price: Number(row.price),
+            display_price: hasNumericDisplay ? String(row.display_price) : null,
+          };
+        });
 
         setAdPlans([...mappedFeatured, ...mappedPopup]);
       }
@@ -557,10 +558,18 @@ const PostAd = () => {
 
       // Attach chosen plan, price, date, and slot if featured or popup
       if (postingType !== "free" && selectedPlan) {
+        const effectivePrice = selectedPlan.display_price !== null && selectedPlan.display_price !== undefined && String(selectedPlan.display_price).trim() !== "" && !isNaN(Number(selectedPlan.display_price))
+          ? Number(selectedPlan.display_price)
+          : Number(selectedPlan.price);
+
         attributes.plan_tier = selectedPlan.plan_tier;
         attributes.plan_name = selectedPlan.name;
         attributes.plan_duration = selectedPlan.duration_days;
-        attributes.plan_price = selectedPlan.price;
+        attributes.plan_price = effectivePrice;
+        if (selectedPlan.display_price) {
+          attributes.original_price = selectedPlan.price;
+          attributes.display_price = selectedPlan.display_price;
+        }
         attributes.start_date = selectedDate;
         if (postingType === "popup") {
           attributes.slot_number = selectedSlot;
@@ -614,7 +623,11 @@ const PostAd = () => {
 
       // If popup promotion is selected, insert schedule with chosen plan, date, and slot
       if (postingType === "popup" && selectedDate && selectedSlot !== null) {
-        const paymentAmount = selectedPlan ? Number(selectedPlan.price) : 999;
+        const paymentAmount = selectedPlan
+          ? (selectedPlan.display_price !== null && selectedPlan.display_price !== undefined && String(selectedPlan.display_price).trim() !== "" && !isNaN(Number(selectedPlan.display_price))
+              ? Number(selectedPlan.display_price)
+              : Number(selectedPlan.price))
+          : 999;
 
         const { error: popupError } = await supabase
           .from("popup_ad_schedules")
@@ -740,10 +753,10 @@ const PostAd = () => {
                   <TableCell className="font-medium">Pricing</TableCell>
                   <TableCell className="text-center font-bold text-green-600">FREE</TableCell>
                   <TableCell className="text-center bg-yellow-50 dark:bg-yellow-950 font-bold">
-                    From ₹{getPlansForType("featured")[0]?.price || 199}
+                    From ₹{getPlansForType("featured")[0]?.display_price || getPlansForType("featured")[0]?.price || 199}
                   </TableCell>
                   <TableCell className="text-center bg-purple-50 dark:bg-purple-950 font-bold">
-                    From ₹{getPlansForType("popup")[0]?.price || 199}
+                    From ₹{getPlansForType("popup")[0]?.display_price || getPlansForType("popup")[0]?.price || 199}
                   </TableCell>
                 </TableRow>
               </TableBody>
@@ -1154,12 +1167,12 @@ const PostAd = () => {
                         <h3 className="text-xl font-bold">{plan.name}</h3>
                       </div>
                       <div>
-                        {plan.has_display_price && plan.original_price !== undefined && plan.original_price !== plan.price && plan.original_price > 0 ? (
+                        {plan.display_price !== null && plan.display_price !== undefined && String(plan.display_price).trim() !== "" && !isNaN(Number(plan.display_price)) ? (
                           <div className="flex items-baseline gap-2">
-                            <span className="text-xl font-bold text-red-500 line-through decoration-red-500">
-                              ₹{plan.original_price}
-                            </span>
                             <span className="text-3xl font-extrabold text-foreground">
+                              ₹{plan.display_price}
+                            </span>
+                            <span className="text-lg font-semibold text-red-500 line-through">
                               ₹{plan.price}
                             </span>
                           </div>
@@ -1393,14 +1406,16 @@ const PostAd = () => {
                 </div>
                 <div>
                   <span className="text-muted-foreground text-xs uppercase">Plan Fee:</span>
-                  <div className="mt-0.5">
-                    {selectedPlan?.has_display_price && selectedPlan?.original_price !== undefined && selectedPlan?.original_price !== selectedPlan?.price && selectedPlan?.original_price > 0 ? (
-                      <div className="flex items-baseline gap-2">
-                        <span className="text-sm font-semibold text-red-500 line-through">₹{selectedPlan.original_price}</span>
-                        <span className="font-bold text-lg text-primary">₹{selectedPlan.price}</span>
-                      </div>
-                    ) : (
-                      <p className="font-bold text-lg text-primary">₹{selectedPlan?.price}</p>
+                  <div className="flex items-baseline gap-2 mt-0.5">
+                    <p className="font-bold text-lg text-primary">
+                      ₹{selectedPlan?.display_price !== null && selectedPlan?.display_price !== undefined && String(selectedPlan?.display_price).trim() !== "" && !isNaN(Number(selectedPlan?.display_price))
+                        ? selectedPlan.display_price
+                        : selectedPlan?.price}
+                    </p>
+                    {selectedPlan?.display_price !== null && selectedPlan?.display_price !== undefined && String(selectedPlan?.display_price).trim() !== "" && !isNaN(Number(selectedPlan?.display_price)) && (
+                      <span className="text-xs font-semibold text-red-500 line-through">
+                        ₹{selectedPlan.price}
+                      </span>
                     )}
                   </div>
                 </div>

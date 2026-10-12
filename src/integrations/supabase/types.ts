@@ -445,6 +445,8 @@ export type Database = {
           plan_type: string
           price: number
           updated_at: string
+          display_price: string | null
+          plan_name: string | null
         }
         Insert: {
           created_at?: string
@@ -454,6 +456,8 @@ export type Database = {
           plan_type: string
           price: number
           updated_at?: string
+          display_price?: string | null
+          plan_name?: string | null
         }
         Update: {
           created_at?: string
@@ -463,6 +467,8 @@ export type Database = {
           plan_type?: string
           price?: number
           updated_at?: string
+          display_price?: string | null
+          plan_name?: string | null
         }
         Relationships: []
       }
