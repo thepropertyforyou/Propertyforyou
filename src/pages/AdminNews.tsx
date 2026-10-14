@@ -270,6 +270,9 @@ const AdminNews = () => {
                     defaultValue={formData.image_url}
                     onUploadComplete={(url) => setFormData({ ...formData, image_url: url })}
                     label="Article Image"
+                    targetWidth={1280}
+                    targetHeight={720}
+                    recommendedSize="Recommended: 1280 × 720 px (16:9)"
                   />
                 </div>
 

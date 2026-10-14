@@ -530,11 +530,14 @@ const AdminPopupAds = () => {
                             View Payment Proof
                           </a>
                         ) : (
-                          <div className="mt-2 w-32">
+                          <div className="mt-2 w-36">
                             <ImageUpload 
                               bucket="popup-ads"
                               onUploadComplete={(url) => handleProofUpload(schedule.id, url)}
                               label="Upload Proof"
+                              targetWidth={800}
+                              targetHeight={1000}
+                              recommendedSize="Recommended: 800 × 1000 px"
                             />
                           </div>
                         )}

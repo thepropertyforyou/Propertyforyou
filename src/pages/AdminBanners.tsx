@@ -217,6 +217,9 @@ const AdminBanners = () => {
           bucket="banners"
           onUploadComplete={(url) => setCurrentBanner({...currentBanner, imageUrl: url})}
           label={currentBanner.imageUrl ? "Change Image" : "Upload Banner Image"}
+          targetWidth={1920}
+          targetHeight={300}
+          recommendedSize="Recommended: 1920 × 300 px"
         />
       </div>
       <div className="space-y-2">

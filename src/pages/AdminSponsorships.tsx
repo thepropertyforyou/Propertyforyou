@@ -289,6 +289,9 @@ const AdminSponsorships = () => {
                       bucket="sponsorship-banners"
                       onUploadComplete={(url) => setNewSponsorship({...newSponsorship, bannerUrl: url})}
                       label="Ad Banner *"
+                      targetWidth={1280}
+                      targetHeight={720}
+                      recommendedSize="Recommended: 1280 × 720 px"
                    />
                 </div>
                 <div className="space-y-2">
@@ -296,6 +299,9 @@ const AdminSponsorships = () => {
                       bucket="sponsorship-banners"
                       onUploadComplete={(url) => setNewSponsorship({...newSponsorship, proofUrl: url})}
                       label="Payment Proof"
+                      targetWidth={800}
+                      targetHeight={1000}
+                      recommendedSize="Recommended: 800 × 1000 px"
                    />
                 </div>
               </div>
@@ -378,6 +384,9 @@ const AdminSponsorships = () => {
                                     bucket="sponsorship-banners"
                                     onUploadComplete={(url) => handleFileUpload(sponsorship.id, url, 'payment_proof')}
                                     label="Upload Proof"
+                                     targetWidth={800}
+                                     targetHeight={1000}
+                                     recommendedSize="Recommended: 800 × 1000 px"
                                   />
                                 </div>
                              )}
@@ -421,6 +430,9 @@ const AdminSponsorships = () => {
                                   bucket="sponsorship-banners"
                                   onUploadComplete={(url) => handleFileUpload(sponsorship.id, url, 'banner_url')}
                                   label="Change Banner"
+                                  targetWidth={1280}
+                                  targetHeight={720}
+                                  recommendedSize="Recommended: 1280 × 720 px"
                                />
                             </div>
                           </div>

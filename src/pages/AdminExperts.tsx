@@ -433,6 +433,9 @@ const AdminExperts = () => {
                   defaultValue={formData.image_url}
                   onUploadComplete={(url) => setFormData({ ...formData, image_url: url })}
                   label="Expert Profile Image"
+                  targetWidth={500}
+                  targetHeight={500}
+                  recommendedSize="Recommended: 500 × 500 px (1:1)"
                 />
               </div>
               <div className="flex justify-end gap-2">

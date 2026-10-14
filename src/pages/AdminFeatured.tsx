@@ -357,6 +357,9 @@ const AdminFeatured = () => {
                       bucket="listing-images"
                       onUploadComplete={(url) => setNewFeatured({...newFeatured, proof: url})}
                       label="Payment Proof (Optional)"
+                      targetWidth={800}
+                      targetHeight={1000}
+                      recommendedSize="Recommended: 800 × 1000 px"
                    />
                 </div>
               </div>
@@ -422,6 +425,9 @@ const AdminFeatured = () => {
                           bucket="listing-images"
                           onUploadComplete={(url) => handleProofUpload(request.id, url)}
                           label="Upload Proof"
+                          targetWidth={800}
+                          targetHeight={1000}
+                          recommendedSize="Recommended: 800 × 1000 px"
                         />
                       </div>
                     )}

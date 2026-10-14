@@ -8,6 +8,8 @@ export async function canvasPreview(
   crop: PixelCrop,
   scale = 1,
   rotate = 0,
+  targetWidth?: number,
+  targetHeight?: number,
 ) {
   const ctx = canvas.getContext('2d');
 
@@ -17,7 +19,34 @@ export async function canvasPreview(
 
   const scaleX = image.naturalWidth / image.width;
   const scaleY = image.naturalHeight / image.height;
-  
+
+  const cropX = crop.x * scaleX;
+  const cropY = crop.y * scaleY;
+  const cropWidth = crop.width * scaleX;
+  const cropHeight = crop.height * scaleY;
+
+  // When exact target dimensions are requested, render directly to those dimensions
+  if (targetWidth && targetHeight) {
+    canvas.width = targetWidth;
+    canvas.height = targetHeight;
+
+    ctx.imageSmoothingEnabled = true;
+    ctx.imageSmoothingQuality = 'high';
+
+    ctx.drawImage(
+      image,
+      cropX,
+      cropY,
+      cropWidth,
+      cropHeight,
+      0,
+      0,
+      targetWidth,
+      targetHeight
+    );
+    return;
+  }
+
   const pixelRatio = window.devicePixelRatio || 1;
 
   canvas.width = Math.floor(crop.width * scaleX * pixelRatio);
@@ -25,9 +54,6 @@ export async function canvasPreview(
 
   ctx.scale(pixelRatio, pixelRatio);
   ctx.imageSmoothingQuality = 'high';
-
-  const cropX = crop.x * scaleX;
-  const cropY = crop.y * scaleY;
 
   const rotateRads = rotate * TO_RADIANS;
   const centerX = image.naturalWidth / 2;
@@ -64,10 +90,12 @@ export async function canvasPreview(
 export async function getCroppedImg(
   image: HTMLImageElement,
   crop: PixelCrop,
-  fileName: string
+  fileName: string,
+  targetWidth?: number,
+  targetHeight?: number,
 ): Promise<File> {
   const canvas = document.createElement('canvas');
-  await canvasPreview(image, canvas, crop);
+  await canvasPreview(image, canvas, crop, 1, 0, targetWidth, targetHeight);
   
   return new Promise((resolve, reject) => {
     canvas.toBlob((blob) => {
@@ -76,6 +104,7 @@ export async function getCroppedImg(
         return;
       }
       resolve(new File([blob], fileName, { type: 'image/jpeg', lastModified: Date.now() }));
-    }, 'image/jpeg', 0.95);
+    }, 'image/jpeg', 0.92);
   });
 }
+

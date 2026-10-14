@@ -12,13 +12,30 @@ interface ImageUploadProps {
   defaultValue?: string;
   label?: string;
   aspectRatio?: number;
+  targetWidth?: number;
+  targetHeight?: number;
+  recommendedSize?: string;
 }
 
-const ImageUpload = ({ bucket, onUploadComplete, defaultValue, label = "Upload Image", aspectRatio }: ImageUploadProps) => {
+const ImageUpload = ({
+  bucket,
+  onUploadComplete,
+  defaultValue,
+  label = "Upload Image",
+  aspectRatio,
+  targetWidth,
+  targetHeight,
+  recommendedSize,
+}: ImageUploadProps) => {
   const [uploading, setUploading] = useState(false);
   const [preview, setPreview] = useState<string | null>(defaultValue || null);
   const [cropperOpen, setCropperOpen] = useState(false);
   const [rawImageSrc, setRawImageSrc] = useState<string | null>(null);
+
+  const effectiveAspect = aspectRatio || (targetWidth && targetHeight ? targetWidth / targetHeight : undefined);
+  const effectiveRecommendedSize =
+    recommendedSize ||
+    (targetWidth && targetHeight ? `Recommended: ${targetWidth} × ${targetHeight} px` : undefined);
 
   const handleFileSelect = (event: React.ChangeEvent<HTMLInputElement>) => {
     const file = event.target.files?.[0];
@@ -73,12 +90,24 @@ const ImageUpload = ({ bucket, onUploadComplete, defaultValue, label = "Upload I
     onUploadComplete("");
   };
 
+  const containerWidthClass =
+    effectiveAspect && effectiveAspect > 2.5
+      ? "w-full max-w-lg"
+      : effectiveAspect === 1
+      ? "w-44 max-w-full"
+      : effectiveAspect && effectiveAspect < 1
+      ? "w-48 max-w-full"
+      : "w-full max-w-sm";
+
   return (
-    <div className="space-y-4">
+    <div className="space-y-2">
       <Label>{label}</Label>
-      <div className="flex flex-col items-center gap-4">
+      <div className="flex flex-col items-center gap-2">
         {preview ? (
-          <div className="relative group w-full max-w-sm aspect-video rounded-lg overflow-hidden border bg-muted">
+          <div
+            className={`relative group ${containerWidthClass} rounded-lg overflow-hidden border bg-muted`}
+            style={{ aspectRatio: effectiveAspect ? `${effectiveAspect}` : '16/9' }}
+          >
             <img 
               src={preview} 
               alt="Preview" 
@@ -100,11 +129,14 @@ const ImageUpload = ({ bucket, onUploadComplete, defaultValue, label = "Upload I
             )}
           </div>
         ) : (
-          <label className="flex flex-col items-center justify-center w-full max-w-sm aspect-video border-2 border-dashed rounded-lg cursor-pointer hover:bg-muted/50 transition-colors bg-muted/20 border-muted">
-            <div className="flex flex-col items-center justify-center pt-5 pb-6">
-              <Upload className="w-8 h-8 mb-4 text-muted-foreground" />
-              <p className="mb-2 text-sm text-muted-foreground font-semibold">Click to upload</p>
-              <p className="text-xs text-muted-foreground">SVG, PNG, JPG or WebP</p>
+          <label
+            className={`flex flex-col items-center justify-center ${containerWidthClass} border-2 border-dashed rounded-lg cursor-pointer hover:bg-muted/50 transition-colors bg-muted/20 border-muted p-4`}
+            style={{ aspectRatio: effectiveAspect ? `${effectiveAspect}` : '16/9' }}
+          >
+            <div className="flex flex-col items-center justify-center text-center">
+              <Upload className="w-7 h-7 mb-2 text-muted-foreground" />
+              <p className="mb-1 text-sm text-muted-foreground font-semibold">Click to upload</p>
+              <p className="text-xs text-muted-foreground">PNG, JPG, WebP</p>
             </div>
             <input 
               type="file" 
@@ -115,6 +147,12 @@ const ImageUpload = ({ bucket, onUploadComplete, defaultValue, label = "Upload I
             />
           </label>
         )}
+
+        {effectiveRecommendedSize && (
+          <p className="text-xs text-muted-foreground font-medium text-center">
+            {effectiveRecommendedSize}
+          </p>
+        )}
       </div>
 
       <ImageCropperDialog
@@ -122,7 +160,9 @@ const ImageUpload = ({ bucket, onUploadComplete, defaultValue, label = "Upload I
         onOpenChange={setCropperOpen}
         imageSrc={rawImageSrc}
         onCropComplete={handleUpload}
-        aspectRatio={aspectRatio}
+        aspectRatio={effectiveAspect}
+        targetWidth={targetWidth}
+        targetHeight={targetHeight}
       />
     </div>
   );

@@ -208,6 +208,9 @@ const AdminListingDetail = () => {
                     bucket="listing-images"
                     onUploadComplete={handleNewImageUpload}
                     label="Add Image"
+                     targetWidth={1200}
+                     targetHeight={900}
+                     recommendedSize="Recommended: 1200 × 900 px (4:3)"
                  />
               </div>
             </div>

@@ -158,6 +158,9 @@ const AdminSettings = () => {
                     )
                   }
                   label="Site Logo"
+                  targetWidth={400}
+                  targetHeight={100}
+                  recommendedSize="Recommended: 400 × 100 px"
                 />
               </div>
 
