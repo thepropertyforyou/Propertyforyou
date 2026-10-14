@@ -1,8 +1,6 @@
 import { useState, useEffect, useRef } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { Card } from "@/components/ui/card";
-import { Badge } from "@/components/ui/badge";
-import { ArrowRight } from "lucide-react";
 import { Carousel, CarouselContent, CarouselItem, CarouselApi } from "@/components/ui/carousel";
 import Autoplay from "embla-carousel-autoplay";
 
@@ -11,164 +9,233 @@ interface Sponsorship {
   business_name: string;
   banner_url: string;
   destination_url: string;
+  start_date?: string | null;
+  end_date?: string | null;
+  status?: string;
 }
 
-const SponsoredAdsSidebar = () => {
-  const [sponsorships, setSponsorships] = useState<Sponsorship[]>([]);
-  const [api1, setApi1] = useState<CarouselApi>();
-  const [api2, setApi2] = useState<CarouselApi>();
-  const [current1, setCurrent1] = useState(0);
-  const [current2, setCurrent2] = useState(0);
-  const autoplay1Ref = useRef(Autoplay({ delay: 3000, stopOnInteraction: false }));
-  const autoplay2Ref = useRef(Autoplay({ delay: 3000, stopOnInteraction: false }));
+const SponsoredAdCard = ({
+  sponsorships,
+  onSponsorshipClick,
+}: {
+  sponsorships: Sponsorship[];
+  onSponsorshipClick: (sponsorship: Sponsorship) => void;
+}) => {
+  const [api, setApi] = useState<CarouselApi>();
+  const [currentSlide, setCurrentSlide] = useState(0);
+
+  // Auto-slide every 2 seconds, continuously, looping forever, and pause on hover
+  const autoplay = useRef(
+    Autoplay({
+      delay: 2000,
+      stopOnInteraction: false,
+      stopOnMouseEnter: true,
+    })
+  );
 
   useEffect(() => {
-    fetchActiveSponsorships();
-  }, []);
+    if (!api) return;
+    setCurrentSlide(api.selectedScrollSnap());
+    const onSelect = () => {
+      setCurrentSlide(api.selectedScrollSnap());
+    };
+    api.on("select", onSelect);
+    return () => {
+      api.off("select", onSelect);
+    };
+  }, [api]);
 
-  useEffect(() => {
-    if (!api1) return;
-    setCurrent1(api1.selectedScrollSnap());
-    api1.on("select", () => setCurrent1(api1.selectedScrollSnap()));
-  }, [api1]);
+  return (
+    <Card className="p-4 overflow-hidden border rounded-2xl shadow-sm bg-card">
+      <h3 className="text-sm font-semibold mb-3 text-foreground">Sponsored</h3>
 
-  useEffect(() => {
-    if (!api2) return;
-    setCurrent2(api2.selectedScrollSnap());
-    api2.on("select", () => setCurrent2(api2.selectedScrollSnap()));
-  }, [api2]);
-
-  const fetchActiveSponsorships = async () => {
-    try {
-      const { data, error } = await supabase
-        .from('sponsorships')
-        .select('id, business_name, banner_url, destination_url')
-        .eq('status', 'approved')
-        .lte('start_date', new Date().toISOString())
-        .gte('end_date', new Date().toISOString())
-        .order('created_at', { ascending: false });
-
-      if (error) throw error;
-      setSponsorships(data || []);
-    } catch (error) {
-      console.error("Error fetching active sponsorships:", error);
-    }
-  };
-
-  const handleClick = async (sponsorship: Sponsorship) => {
-    try {
-      const { data: currentData } = await supabase
-        .from('sponsorships')
-        .select('clicks')
-        .eq('id', sponsorship.id)
-        .single();
-
-      if (currentData) {
-        await supabase
-          .from('sponsorships')
-          .update({ clicks: (currentData.clicks || 0) + 1 })
-          .eq('id', sponsorship.id);
-      }
-
-      window.open(sponsorship.destination_url, '_blank', 'noopener,noreferrer');
-    } catch (error) {
-      console.error("Error tracking click:", error);
-      window.open(sponsorship.destination_url, '_blank', 'noopener,noreferrer');
-    }
-  };
-
-  if (sponsorships.length === 0) {
-    return (
-      <div className="sticky top-4 bg-muted/30 rounded-lg p-4 border">
-        <h3 className="text-sm font-semibold mb-3">Sponsored</h3>
-        <div className="aspect-square bg-gradient-to-br from-primary/20 to-accent/20 rounded-lg flex items-center justify-center">
-          <span className="text-xs text-muted-foreground">Ad Space</span>
-        </div>
-      </div>
-    );
-  }
-
-  const renderCarousel = (setApiFunc: (api: CarouselApi) => void, autoplayRef: any, current: number) => (
-    <Card className="overflow-hidden">
-      <Carousel
-        opts={{ loop: true }}
-        plugins={[autoplayRef.current]}
-        setApi={setApiFunc}
-      >
-        <CarouselContent>
-          {sponsorships.map((sponsorship) => (
-            <CarouselItem key={sponsorship.id}>
-              <div
-                className="cursor-pointer relative"
-                onClick={() => handleClick(sponsorship)}
-              >
-                {/* Banner Image */}
-                <div className="relative aspect-video bg-muted">
-                  <img
-                    src={sponsorship.banner_url}
-                    alt={sponsorship.business_name}
-                    className="w-full h-full object-cover"
-                  />
-                  {/* Badge on every slide */}
-                  <Badge className="absolute top-3 left-3 z-10 bg-green-500 text-white hover:bg-green-600">
-                    Sponsored
-                  </Badge>
-                </div>
-
-                {/* Content */}
-                <div className="p-4 space-y-3">
-                  <h4 className="font-bold text-lg line-clamp-2">
-                    {sponsorship.business_name}
-                  </h4>
-                  <p className="text-sm text-muted-foreground line-clamp-2">
-                    Premium services and exclusive offers
-                  </p>
-
-                  <div className="flex items-center justify-between pt-2">
-                    <span className="text-xs text-muted-foreground">
-                      by {sponsorship.business_name}
-                    </span>
-                    <a
-                      href={sponsorship.destination_url}
-                      target="_blank"
-                      rel="noopener noreferrer"
-                      className="inline-flex items-center gap-1 text-blue-600 hover:text-blue-700 text-sm font-medium"
-                      onClick={(e) => e.stopPropagation()}
-                    >
-                      Learn More
-                      <ArrowRight className="h-3 w-3" />
-                    </a>
-                  </div>
-                </div>
-              </div>
-            </CarouselItem>
-          ))}
-        </CarouselContent>
-      </Carousel>
-
-      {/* Dots Indicator */}
-      {sponsorships.length > 1 && (
-        <div className="flex justify-center gap-1.5 py-3">
-          {sponsorships.map((_, index) => (
-            <button
-              key={index}
-              className={`h-1.5 rounded-full transition-all ${
-                index === current
-                  ? "w-6 bg-primary"
-                  : "w-1.5 bg-muted-foreground/30"
-              }`}
-              aria-label={`Go to slide ${index + 1}`}
+      {sponsorships.length === 1 ? (
+        <a
+          href={sponsorships[0].destination_url || "#"}
+          target={sponsorships[0].destination_url ? "_blank" : "_self"}
+          rel="noopener noreferrer"
+          onClick={(e) => {
+            if (sponsorships[0].destination_url) {
+              e.preventDefault();
+              onSponsorshipClick(sponsorships[0]);
+            }
+          }}
+          className="block w-full cursor-pointer group"
+        >
+          <div className="relative aspect-video w-full rounded-lg overflow-hidden bg-muted">
+            <img
+              src={sponsorships[0].banner_url}
+              alt={sponsorships[0].business_name || "Sponsored Ad"}
+              className="w-full h-full object-cover transition-transform duration-300 group-hover:scale-105"
             />
-          ))}
+          </div>
+          {sponsorships[0].business_name && (
+            <p className="mt-2 text-xs font-medium text-muted-foreground truncate">
+              {sponsorships[0].business_name}
+            </p>
+          )}
+        </a>
+      ) : (
+        <div>
+          <Carousel
+            opts={{
+              loop: true,
+            }}
+            plugins={[autoplay.current]}
+            setApi={setApi}
+            className="w-full"
+          >
+            <CarouselContent>
+              {sponsorships.map((sponsorship) => (
+                <CarouselItem key={sponsorship.id}>
+                  <a
+                    href={sponsorship.destination_url || "#"}
+                    target={sponsorship.destination_url ? "_blank" : "_self"}
+                    rel="noopener noreferrer"
+                    onClick={(e) => {
+                      if (sponsorship.destination_url) {
+                        e.preventDefault();
+                        onSponsorshipClick(sponsorship);
+                      }
+                    }}
+                    className="block w-full cursor-pointer group"
+                  >
+                    <div className="relative aspect-video w-full rounded-lg overflow-hidden bg-muted">
+                      <img
+                        src={sponsorship.banner_url}
+                        alt={sponsorship.business_name || "Sponsored Ad"}
+                        className="w-full h-full object-cover transition-transform duration-300 group-hover:scale-105"
+                      />
+                    </div>
+                    {sponsorship.business_name && (
+                      <p className="mt-2 text-xs font-medium text-muted-foreground truncate">
+                        {sponsorship.business_name}
+                      </p>
+                    )}
+                  </a>
+                </CarouselItem>
+              ))}
+            </CarouselContent>
+          </Carousel>
+
+          {/* Dots Indicator */}
+          <div className="flex justify-center gap-1.5 pt-2.5">
+            {sponsorships.map((_, index) => (
+              <button
+                key={index}
+                onClick={() => api?.scrollTo(index)}
+                className={`h-1.5 rounded-full transition-all ${
+                  index === currentSlide
+                    ? "w-5 bg-primary"
+                    : "w-1.5 bg-muted-foreground/30 hover:bg-muted-foreground/50"
+                }`}
+                aria-label={`Go to slide ${index + 1}`}
+              />
+            ))}
+          </div>
         </div>
       )}
     </Card>
   );
+};
+
+const SponsoredAdsSidebar = () => {
+  const [sponsorships, setSponsorships] = useState<Sponsorship[]>([]);
+  const [loading, setLoading] = useState(true);
+
+  const fetchActiveSponsorships = async () => {
+    try {
+      const now = new Date();
+      const { data, error } = await supabase
+        .from("sponsorships")
+        .select("id, business_name, banner_url, destination_url, start_date, end_date, status, created_at")
+        .eq("status", "approved")
+        .order("created_at", { ascending: false });
+
+      if (error) throw error;
+
+      // Filter only currently active sponsorships
+      const active = (data || []).filter((s) => {
+        if (!s.banner_url) return false;
+        if (s.start_date && new Date(s.start_date) > now) return false;
+        if (s.end_date && new Date(s.end_date) < now) return false;
+        return true;
+      });
+
+      setSponsorships(active);
+    } catch (error) {
+      console.error("Error fetching active sponsorships:", error);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  useEffect(() => {
+    fetchActiveSponsorships();
+
+    // Subscribe to live postgres changes so admin updates reflect immediately
+    const channel = supabase
+      .channel("public:sponsorships:sidebar")
+      .on(
+        "postgres_changes",
+        { event: "*", schema: "public", table: "sponsorships" },
+        () => {
+          fetchActiveSponsorships();
+        }
+      )
+      .subscribe();
+
+    return () => {
+      supabase.removeChannel(channel);
+    };
+  }, []);
+
+  const handleClick = async (sponsorship: Sponsorship) => {
+    if (!sponsorship.destination_url) return;
+
+    try {
+      const { data: currentData } = await supabase
+        .from("sponsorships")
+        .select("clicks")
+        .eq("id", sponsorship.id)
+        .single();
+
+      if (currentData) {
+        await supabase
+          .from("sponsorships")
+          .update({ clicks: (currentData.clicks || 0) + 1 })
+          .eq("id", sponsorship.id);
+      }
+    } catch (error) {
+      console.error("Error tracking click:", error);
+    } finally {
+      const targetUrl = sponsorship.destination_url.startsWith("http")
+        ? sponsorship.destination_url
+        : `https://${sponsorship.destination_url}`;
+      window.open(targetUrl, "_blank", "noopener,noreferrer");
+    }
+  };
+
+  // Only show when at least one sponsorship exists (replaces Ad Space placeholder completely)
+  if (loading || sponsorships.length === 0) {
+    return null;
+  }
+
+  // Each card holds up to 3 images; 4th goes into next card below (stacked line by line)
+  const cardChunks: Sponsorship[][] = [];
+  for (let i = 0; i < sponsorships.length; i += 3) {
+    cardChunks.push(sponsorships.slice(i, i + 3));
+  }
 
   return (
     <div className="space-y-6">
-      {renderCarousel(setApi1, autoplay1Ref, current1)}
-      {renderCarousel(setApi2, autoplay2Ref, current2)}
+      {cardChunks.map((chunk, index) => (
+        <SponsoredAdCard
+          key={`sponsored-card-${index}`}
+          sponsorships={chunk}
+          onSponsorshipClick={handleClick}
+        />
+      ))}
     </div>
   );
 };
