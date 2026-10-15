@@ -105,14 +105,6 @@ const Experts = () => {
     }
   };
 
-  const serviceBoxes = [
-    {
-      image: "https://i.pinimg.com/736x/06/e7/30/06e73067adc157cb549e79145151489c.jpg",
-      title: "Property Services",
-      description: "Find your dream property",
-    },
-  ];
-
   return (
     <div className="min-h-screen bg-background">
       <Header />
@@ -140,28 +132,10 @@ const Experts = () => {
         </div>
       </section>
 
-      {/* Service Boxes Section */}
+      {/* Experts for Your Needs Section */}
       <section className="bg-white py-16 px-4">
         <div className="container mx-auto">
-          <div className="grid md:grid-cols-3 gap-8 mb-12">
-            {serviceBoxes.map((box, index) => (
-              <Card
-                key={index}
-                className="overflow-hidden hover:shadow-xl transition-all duration-300 hover:-translate-y-2"
-              >
-                <div className="aspect-video bg-muted relative">
-                  <img src={box.image} alt={box.title} className="w-full h-full object-cover" />
-                </div>
-                <CardContent className="p-6 text-center">
-                  <h3 className="text-xl font-bold text-foreground mb-2">{box.title}</h3>
-                  <p className="text-muted-foreground">{box.description}</p>
-                </CardContent>
-              </Card>
-            ))}
-          </div>
-
-          {/* Experts for Your Needs Section */}
-          <div className="mt-16">
+          <div>
             <div className="flex flex-col md:flex-row justify-between items-center mb-12 gap-4">
               <h2 className="text-3xl md:text-4xl font-bold text-foreground text-center md:text-left">
                 Experts for Your Needs
