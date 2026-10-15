@@ -2,7 +2,6 @@ import { useState, useEffect } from "react";
 import { X } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { Badge } from "@/components/ui/badge";
-import { Button } from "@/components/ui/button";
 import { useNavigate } from "react-router-dom";
 
 interface PopupAdItem {
@@ -14,6 +13,21 @@ interface PopupAdItem {
   listingId?: string | null;
 }
 
+// Get today's date formatted as YYYY-MM-DD in Indian Standard Time (IST, UTC+05:30)
+const getTodayIndiaDate = (): string => {
+  try {
+    return new Intl.DateTimeFormat('en-CA', { timeZone: 'Asia/Kolkata' }).format(new Date());
+  } catch {
+    const d = new Date();
+    const utc = d.getTime() + (d.getTimezoneOffset() * 60000);
+    const ist = new Date(utc + (3600000 * 5.5));
+    const year = ist.getFullYear();
+    const month = String(ist.getMonth() + 1).padStart(2, '0');
+    const day = String(ist.getDate()).padStart(2, '0');
+    return `${year}-${month}-${day}`;
+  }
+};
+
 const FeaturedPopupAds = () => {
   const [isOpen, setIsOpen] = useState(false);
   const [ads, setAds] = useState<PopupAdItem[]>([]);
@@ -21,13 +35,13 @@ const FeaturedPopupAds = () => {
   const navigate = useNavigate();
 
   useEffect(() => {
-    // Initial fetch to show popup on website load
+    // Live fetch today's approved popup ads every time site is opened or refreshed
     fetchScheduledPopupAds();
 
-    // Set up 5-minute interval for reappearance
+    // Re-check periodically every 5 minutes in case a new ad is scheduled for the current day
     const interval = setInterval(() => {
       fetchScheduledPopupAds();
-    }, 5 * 60 * 1000); // 5 minutes
+    }, 5 * 60 * 1000);
 
     return () => clearInterval(interval);
   }, []);
@@ -48,7 +62,7 @@ const FeaturedPopupAds = () => {
     if (isOpen && ads.length > 1) {
       const interval = setInterval(() => {
         setCurrentIndex((prev) => (prev + 1) % ads.length);
-      }, 5000); // Auto-slide every 5 seconds
+      }, 5000); // Auto-slide every 5 seconds if multiple ads
 
       return () => clearInterval(interval);
     }
@@ -56,9 +70,10 @@ const FeaturedPopupAds = () => {
 
   const fetchScheduledPopupAds = async () => {
     try {
-      const today = new Date().toISOString().split('T')[0];
-      
-      // Fetch all approved and paid popup ads
+      const today = getTodayIndiaDate();
+
+      // Fetch today's approved popup ads live from database
+      let rows: any[] = [];
       const { data, error } = await supabase
         .from("popup_ad_schedules")
         .select(`
@@ -70,6 +85,7 @@ const FeaturedPopupAds = () => {
           image_url,
           link_url,
           title,
+          admin_approved,
           listings (
             id,
             title,
@@ -81,49 +97,67 @@ const FeaturedPopupAds = () => {
           )
         `)
         .eq("admin_approved", true)
-        .eq("payment_status", "paid")
         .order("slot_number", { ascending: true });
 
-      if (error) throw error;
+      if (error) {
+        console.warn("Retrying popup ads query without listings join:", error.message);
+        // Fallback without relation join in case listings table RLS or relation restricts read
+        const { data: fallbackData, error: fallbackError } = await supabase
+          .from("popup_ad_schedules")
+          .select("id, listing_id, schedule_date, selected_dates, slot_number, image_url, link_url, title, admin_approved")
+          .eq("admin_approved", true)
+          .order("slot_number", { ascending: true });
 
-      if (data && data.length > 0) {
-        // Filter ads where today's date matches schedule_date or is in selected_dates
-        const todayScheduledAds = data.filter((item: any) => {
-          const selectedDates = item.selected_dates || [];
-          return selectedDates.includes(today) || item.schedule_date === today;
+        if (fallbackError) throw fallbackError;
+        rows = fallbackData || [];
+      } else {
+        rows = data || [];
+      }
+
+      if (rows && rows.length > 0) {
+        // Filter ads matching today's date in Indian Standard Time (IST)
+        const todayScheduledAds = rows.filter((item: any) => {
+          const itemScheduleDate = item.schedule_date ? String(item.schedule_date).split('T')[0] : '';
+          const selectedDates = (item.selected_dates || []).map((d: any) => String(d).split('T')[0]);
+          return itemScheduleDate === today || selectedDates.includes(today);
         });
 
         const formattedAds: PopupAdItem[] = todayScheduledAds
           .map((item: any) => {
-            if (item.listings) {
+            if (item.image_url) {
+              return {
+                id: item.id,
+                title: item.title || item.listings?.title || "Featured Ad",
+                imageUrl: item.image_url,
+                linkUrl: item.link_url || null,
+                isCustom: !item.listing_id,
+                listingId: item.listing_id || null,
+              };
+            } else if (item.listings) {
               const img = item.listings.listing_images?.[0]?.image_url;
               return {
                 id: item.listings.id,
                 title: item.listings.title || "Featured Property",
                 imageUrl: img || "",
-                linkUrl: null,
+                linkUrl: item.link_url || null,
                 isCustom: false,
                 listingId: item.listings.id,
-              };
-            } else if (item.image_url) {
-              return {
-                id: item.id,
-                title: item.title || "Featured Ad",
-                imageUrl: item.image_url,
-                linkUrl: item.link_url || null,
-                isCustom: true,
-                listingId: null,
               };
             }
             return null;
           })
           .filter((ad): ad is PopupAdItem => Boolean(ad && ad.imageUrl))
-          .slice(0, 3); // Limit to 3 ads
-        
+          .slice(0, 3); // Top 3 slots
+
         if (formattedAds.length > 0) {
           setAds(formattedAds);
+          setCurrentIndex(0);
           setIsOpen(true);
+        } else {
+          setIsOpen(false);
         }
+      } else {
+        setIsOpen(false);
       }
     } catch (error) {
       console.error("Error fetching popup ads:", error);
@@ -136,13 +170,14 @@ const FeaturedPopupAds = () => {
 
   const handleAdClick = (ad: PopupAdItem) => {
     handleClose();
-    if (ad.isCustom) {
-      if (ad.linkUrl) {
-        if (ad.linkUrl.startsWith("http://") || ad.linkUrl.startsWith("https://")) {
-          window.open(ad.linkUrl, "_blank", "noopener,noreferrer");
-        } else {
-          navigate(ad.linkUrl);
-        }
+    if (ad.linkUrl) {
+      const trimmed = ad.linkUrl.trim();
+      if (trimmed.startsWith("http://") || trimmed.startsWith("https://")) {
+        window.open(trimmed, "_blank", "noopener,noreferrer");
+      } else if (trimmed.startsWith("/")) {
+        navigate(trimmed);
+      } else {
+        window.open(`https://${trimmed}`, "_blank", "noopener,noreferrer");
       }
     } else if (ad.listingId) {
       navigate(`/listing/${ad.listingId}`);
@@ -171,7 +206,7 @@ const FeaturedPopupAds = () => {
         {/* Close Button */}
         <button
           onClick={handleClose}
-          className="absolute top-3 right-3 z-20 bg-background/80 hover:bg-background rounded-full p-2 shadow-lg transition-all"
+          className="absolute top-3 right-3 z-30 bg-background/80 hover:bg-background rounded-full p-2 shadow-lg transition-all"
           aria-label="Close popup"
         >
           <X className="h-5 w-5" />
@@ -226,4 +261,3 @@ const FeaturedPopupAds = () => {
 };
 
 export default FeaturedPopupAds;
-
