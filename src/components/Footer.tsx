@@ -24,9 +24,9 @@ const Footer = () => {
           {/* Company Info */}
           <div className="space-y-4">
             <Link to="/" className="inline-block">
-              <img 
-                src={logo} 
-                alt="The Property For You" 
+              <img
+                src={logo}
+                alt="The Property For You"
                 className="h-12 w-auto"
               />
             </Link>
@@ -75,7 +75,7 @@ const Footer = () => {
             <h4 className="font-semibold text-foreground">Contact Us</h4>
             <ul className="space-y-3">
               <li className="text-sm text-muted-foreground">
-                Karnataka, India
+                Mangalore, Karnataka
               </li>
               <li>
                 <a
@@ -83,7 +83,7 @@ const Footer = () => {
                   className="flex items-center gap-2 text-sm text-muted-foreground hover:text-primary transition-colors"
                 >
                   <Phone className="h-4 w-4" />
-                  +91 9964677010
+                  +91 72595 01115
                 </a>
               </li>
               <li>

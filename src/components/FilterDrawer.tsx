@@ -8,8 +8,9 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { Button } from "@/components/ui/button";
-import { Search, X } from "lucide-react";
+import { Search, X, Star } from "lucide-react";
 import { statesAndDistricts } from "@/data/india-locations";
+import { Switch } from "@/components/ui/switch";
 import {
   Sheet,
   SheetContent,
@@ -20,7 +21,7 @@ import {
 interface FilterDrawerProps {
   category: "properties" | "all";
   filters: any;
-  onFilterChange: (key: string, value: string) => void;
+  onFilterChange: (key: string, value: any) => void;
   onReset: () => void;
   onSearch: () => void;
   open: boolean;
@@ -203,7 +204,27 @@ export const FilterDrawer = ({
             </>
           )}
 
-
+          {/* Featured Only Option */}
+          <div className="pt-2">
+            <div className="flex items-center justify-between p-3 rounded-lg border border-border bg-muted/40 hover:bg-muted/60 transition-colors">
+              <div className="flex items-center gap-2.5">
+                <Star className="h-4 w-4 text-yellow-500 fill-yellow-500" />
+                <div>
+                  <Label htmlFor="featuredOnly" className="text-sm font-semibold cursor-pointer">
+                    Featured only
+                  </Label>
+                  <p className="text-[11px] text-muted-foreground">
+                    Show only featured listings
+                  </p>
+                </div>
+              </div>
+              <Switch
+                id="featuredOnly"
+                checked={Boolean(filters.featuredOnly)}
+                onCheckedChange={(checked) => onFilterChange("featuredOnly", checked)}
+              />
+            </div>
+          </div>
 
           {/* Action Buttons */}
           <div className="space-y-2 pt-4">

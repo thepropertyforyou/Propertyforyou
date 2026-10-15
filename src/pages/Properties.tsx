@@ -9,7 +9,7 @@ import { Card } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";
 import { supabase } from "@/integrations/supabase/client";
-import { MapPin, Filter, X } from "lucide-react";
+import { MapPin, Filter, X, Star } from "lucide-react";
 import { statesAndDistricts } from "@/data/india-locations";
 import { ListingCard } from "@/components/ListingCard";
 import SponsoredAdsSidebar from "@/components/SponsoredAdsSidebar";
@@ -55,6 +55,7 @@ const Properties = () => {
     maxPrice: "",
     propertyType: "",
     bedrooms: "",
+    featuredOnly: false,
   });
 
   useEffect(() => {
@@ -163,6 +164,10 @@ const Properties = () => {
       );
     }
 
+    if (filters.featuredOnly) {
+      filtered = filtered.filter((listing) => listing.is_featured);
+    }
+
     filtered.sort((a, b) => {
       if (a.is_featured && !b.is_featured) return -1;
       if (!a.is_featured && b.is_featured) return 1;
@@ -184,7 +189,7 @@ const Properties = () => {
     setCurrentPage(1);
   };
 
-  const handleFilterChange = (key: string, value: string) => {
+  const handleFilterChange = (key: string, value: any) => {
     setFilters((prev) => ({ ...prev, [key]: value }));
   };
 
@@ -198,6 +203,7 @@ const Properties = () => {
       maxPrice: "",
       propertyType: "",
       bedrooms: "",
+      featuredOnly: false,
     });
   };
 
@@ -251,6 +257,21 @@ const Properties = () => {
                 )}
               </div>
             </div>
+
+            {filters.featuredOnly && (
+              <div className="flex items-center gap-2">
+                <Badge 
+                  variant="secondary" 
+                  className="bg-yellow-500/10 text-yellow-700 dark:text-yellow-400 border border-yellow-500/30 gap-1.5 py-1 px-2.5 text-xs font-medium cursor-pointer hover:bg-yellow-500/20 transition-colors"
+                  onClick={() => handleFilterChange("featuredOnly", false)}
+                  title="Click to remove filter"
+                >
+                  <Star className="h-3 w-3 fill-current text-yellow-500" />
+                  Featured Only
+                  <X className="h-3 w-3 ml-0.5" />
+                </Badge>
+              </div>
+            )}
 
             <FilterDrawer
               category="properties"
