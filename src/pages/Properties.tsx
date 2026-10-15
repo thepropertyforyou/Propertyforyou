@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { useNavigate, useParams } from "react-router-dom";
+import { useNavigate, useParams, useSearchParams } from "react-router-dom";
 import Header from "@/components/Header";
 import Footer from "@/components/Footer";
 import { FilterDrawer } from "@/components/FilterDrawer";
@@ -25,29 +25,92 @@ import {
 interface Listing {
   id: string;
   title: string;
+  description?: string | null;
   price: number;
   location_city: string;
   location_locality: string | null;
   is_featured: boolean;
+  listing_id?: string | null;
   attributes: any;
   created_at: string;
   listing_images: { image_url: string }[];
+  categories?: { name: string } | null;
 }
+
+const normalizeSearchText = (text: any): string => {
+  if (text === null || text === undefined) return "";
+  return String(text)
+    .toLowerCase()
+    .replace(/\s+/g, " ")
+    .trim();
+};
+
+const getListingSearchStrings = (listing: Listing): string[] => {
+  const parts: string[] = [];
+
+  // Title & description
+  if (listing.title) parts.push(listing.title);
+  if (listing.description) parts.push(listing.description);
+
+  // Listing ID
+  if (listing.listing_id) parts.push(listing.listing_id);
+  if (listing.id) parts.push(listing.id);
+
+  // Locations: city/district & locality/taluk
+  if (listing.location_city) parts.push(listing.location_city);
+  if (listing.location_locality) parts.push(listing.location_locality);
+
+  // Attributes locations
+  if (listing.attributes?.state) parts.push(listing.attributes.state);
+  if (listing.attributes?.district) parts.push(listing.attributes.district);
+  if (listing.attributes?.taluk) parts.push(listing.attributes.taluk);
+  if (listing.attributes?.city) parts.push(listing.attributes.city);
+  if (listing.attributes?.locality) parts.push(listing.attributes.locality);
+  if (listing.attributes?.address) parts.push(listing.attributes.address);
+
+  // Derive state from statesAndDistricts based on district or taluk
+  const cityNorm = normalizeSearchText(listing.location_city);
+  const localityNorm = normalizeSearchText(listing.location_locality);
+  for (const item of statesAndDistricts) {
+    const hasDist = item.districts.some((d) => {
+      const dNorm = normalizeSearchText(d.name);
+      if (dNorm && cityNorm && (dNorm === cityNorm || cityNorm.includes(dNorm) || dNorm.includes(cityNorm))) {
+        return true;
+      }
+      if (localityNorm && d.taluks.some((t) => normalizeSearchText(t) === localityNorm)) {
+        return true;
+      }
+      return false;
+    });
+    if (hasDist) {
+      parts.push(item.state);
+      break;
+    }
+  }
+
+  // Property types & categories
+  if (listing.attributes?.propertyType) parts.push(listing.attributes.propertyType);
+  if (listing.attributes?.subCategory) parts.push(listing.attributes.subCategory);
+  if (listing.attributes?.type) parts.push(listing.attributes.type);
+  if (listing.categories?.name) parts.push(listing.categories.name);
+
+  return parts;
+};
 
 const ITEMS_PER_PAGE = 12;
 
 const Properties = () => {
   const navigate = useNavigate();
   const { subCategory } = useParams();
+  const [searchParams, setSearchParams] = useSearchParams();
   const [listings, setListings] = useState<Listing[]>([]);
   const [filteredListings, setFilteredListings] = useState<Listing[]>([]);
   const [loading, setLoading] = useState(true);
   const [currentPage, setCurrentPage] = useState(1);
   const [sortBy, setSortBy] = useState("newest");
   const [filterOpen, setFilterOpen] = useState(false);
-  const [searchQuery, setSearchQuery] = useState("");
   const [filters, setFilters] = useState({
-    search: "",
+    search: searchParams.get("search") || "",
     state: "",
     district: "",
     taluk: "",
@@ -61,6 +124,11 @@ const Properties = () => {
   useEffect(() => {
     fetchListings();
   }, []);
+
+  useEffect(() => {
+    const urlSearch = searchParams.get("search") ?? "";
+    setFilters((prev) => (prev.search === urlSearch ? prev : { ...prev, search: urlSearch }));
+  }, [searchParams]);
 
   useEffect(() => {
     applyFiltersAndSort();
@@ -81,10 +149,12 @@ const Properties = () => {
         .select(`
           id,
           title,
+          description,
           price,
           location_city,
           location_locality,
           is_featured,
+          listing_id,
           attributes,
           created_at,
           listing_images(image_url, display_order),
@@ -114,9 +184,36 @@ const Properties = () => {
     }
 
     if (filters.search) {
-      filtered = filtered.filter((listing) =>
-        listing.title.toLowerCase().includes(filters.search.toLowerCase())
-      );
+      const cleanQuery = normalizeSearchText(filters.search);
+      if (cleanQuery) {
+        const queryWords = cleanQuery.split(" ").filter(Boolean);
+        const strippedQuery = cleanQuery.replace(/[-\s]/g, "");
+
+        filtered = filtered.filter((listing) => {
+          const searchableParts = getListingSearchStrings(listing);
+          const normalizedParts = searchableParts.map(normalizeSearchText);
+          const combined = normalizedParts.join(" ");
+
+          // 1. Direct match on combined text or individual parts
+          if (combined.includes(cleanQuery)) return true;
+          if (normalizedParts.some((part) => part.includes(cleanQuery))) return true;
+
+          // 2. Listing ID matching ignoring dashes and extra spaces (e.g. LST-0001 vs lst 0001)
+          if (listing.listing_id) {
+            const strippedId = normalizeSearchText(listing.listing_id).replace(/[-\s]/g, "");
+            if (strippedId && strippedQuery && (strippedId.includes(strippedQuery) || strippedQuery.includes(strippedId))) {
+              return true;
+            }
+          }
+
+          // 3. Multi-word search where all individual query terms are present in the listing's searchable text
+          if (queryWords.length > 1 && queryWords.every((word) => combined.includes(word))) {
+            return true;
+          }
+
+          return false;
+        });
+      }
     }
 
     if (filters.state && filters.state !== "all") {
@@ -191,6 +288,17 @@ const Properties = () => {
 
   const handleFilterChange = (key: string, value: any) => {
     setFilters((prev) => ({ ...prev, [key]: value }));
+    if (key === "search") {
+      setSearchParams((prev) => {
+        const next = new URLSearchParams(prev);
+        if (value && String(value).trim()) {
+          next.set("search", value);
+        } else {
+          next.delete("search");
+        }
+        return next;
+      }, { replace: true });
+    }
   };
 
   const handleReset = () => {
@@ -205,6 +313,7 @@ const Properties = () => {
       bedrooms: "",
       featuredOnly: false,
     });
+    setSearchParams({}, { replace: true });
   };
 
   const totalPages = Math.ceil(filteredListings.length / ITEMS_PER_PAGE);
@@ -291,7 +400,7 @@ const Properties = () => {
           </div>
             ) : currentListings.length === 0 ? (
               <div className="text-center py-12">
-                <p className="text-muted-foreground">No properties found matching your criteria</p>
+                <p className="text-muted-foreground text-lg">No properties found</p>
               </div>
             ) : (
               <>

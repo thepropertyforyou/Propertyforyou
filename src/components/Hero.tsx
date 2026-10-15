@@ -11,17 +11,11 @@ const Hero = () => {
 
   const handleSearch = (e: React.FormEvent) => {
     e.preventDefault();
-    const query = searchQuery.trim().toLowerCase();
+    const query = searchQuery.trim().replace(/\s+/g, ' ');
     
     if (!query) return;
 
-    // Route based on keywords
-    if (query.includes('propert') || query.includes('home') || query.includes('land') || query.includes('villa') || query.includes('house')) {
-      navigate(`/properties?search=${encodeURIComponent(searchQuery)}`);
-    } else {
-      // Default to properties if no match
-      navigate(`/properties?search=${encodeURIComponent(searchQuery)}`);
-    }
+    navigate(`/properties?search=${encodeURIComponent(query)}`);
   };
 
   return (
@@ -59,6 +53,11 @@ const Hero = () => {
                 placeholder="Search properties..."
                 value={searchQuery}
                 onChange={(e) => setSearchQuery(e.target.value)}
+                onKeyDown={(e) => {
+                  if (e.key === "Enter") {
+                    handleSearch(e);
+                  }
+                }}
                 className="pl-12 pr-28 h-12 bg-background/95 border-2 border-border rounded-lg text-sm shadow-lg backdrop-blur"
               />
               <Button
