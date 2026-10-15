@@ -108,3 +108,90 @@ export async function getCroppedImg(
   });
 }
 
+export interface FrameCropParams {
+  image: HTMLImageElement;
+  frameW: number;
+  frameH: number;
+  offsetX: number;
+  offsetY: number;
+  zoom: number;
+  rotation: number;
+  baseScale: number;
+  targetWidth?: number;
+  targetHeight?: number;
+  fileName?: string;
+}
+
+export async function exportCroppedFrame({
+  image,
+  frameW,
+  frameH,
+  offsetX,
+  offsetY,
+  zoom,
+  rotation,
+  baseScale,
+  targetWidth,
+  targetHeight,
+  fileName = 'cropped-image.jpg',
+}: FrameCropParams): Promise<File> {
+  const canvas = document.createElement('canvas');
+  const ctx = canvas.getContext('2d');
+
+  if (!ctx) {
+    throw new Error('No 2d context available');
+  }
+
+  const aspect = frameW / frameH;
+
+  // Determine output resolution
+  let outW = targetWidth;
+  let outH = targetHeight;
+  if (!outW || !outH) {
+    const isRotated90 = rotation % 180 !== 0;
+    const effectiveNw = isRotated90 ? image.naturalHeight : image.naturalWidth;
+    outW = Math.max(800, Math.min(effectiveNw, 1920));
+    outH = Math.round(outW / aspect);
+  }
+
+  canvas.width = outW;
+  canvas.height = outH;
+
+  ctx.imageSmoothingEnabled = true;
+  ctx.imageSmoothingQuality = 'high';
+
+  // Ratio from on-screen frame coordinate system to canvas coordinate system
+  const scale = outW / frameW;
+
+  // Move to center of canvas + scaled user offset
+  ctx.translate(outW / 2 + offsetX * scale, outH / 2 + offsetY * scale);
+
+  // Rotate if needed
+  if (rotation !== 0) {
+    ctx.rotate((rotation * Math.PI) / 180);
+  }
+
+  // Draw image centered
+  const drawW = image.naturalWidth * baseScale * zoom * scale;
+  const drawH = image.naturalHeight * baseScale * zoom * scale;
+
+  ctx.drawImage(
+    image,
+    -drawW / 2,
+    -drawH / 2,
+    drawW,
+    drawH
+  );
+
+  return new Promise((resolve, reject) => {
+    canvas.toBlob((blob) => {
+      if (!blob) {
+        reject(new Error('Canvas export failed'));
+        return;
+      }
+      resolve(new File([blob], fileName, { type: 'image/jpeg', lastModified: Date.now() }));
+    }, 'image/jpeg', 0.92);
+  });
+}
+
+
