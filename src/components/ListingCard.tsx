@@ -1,7 +1,8 @@
+import { useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { Card } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
-import { MapPin } from "lucide-react";
+import { MapPin, ChevronLeft, ChevronRight } from "lucide-react";
 import { FavoriteButton } from "@/components/FavoriteButton";
 
 interface ListingCardProps {
@@ -12,7 +13,7 @@ interface ListingCardProps {
     location_city: string;
     location_locality: string | null;
     is_featured?: boolean;
-    listing_images?: { image_url: string }[];
+    listing_images?: { image_url: string; display_order?: number }[];
     categories?: { name: string };
     attributes?: any;
   };
@@ -20,6 +21,27 @@ interface ListingCardProps {
 
 export const ListingCard = ({ listing }: ListingCardProps) => {
   const navigate = useNavigate();
+  const [currentImageIndex, setCurrentImageIndex] = useState(0);
+
+  const images = (listing.listing_images || []).sort(
+    (a, b) => (a.display_order ?? 0) - (b.display_order ?? 0)
+  );
+  const hasMultipleImages = images.length > 1;
+
+  const handlePrevImage = (e: React.MouseEvent) => {
+    e.stopPropagation();
+    setCurrentImageIndex((prev) => (prev > 0 ? prev - 1 : images.length - 1));
+  };
+
+  const handleNextImage = (e: React.MouseEvent) => {
+    e.stopPropagation();
+    setCurrentImageIndex((prev) => (prev < images.length - 1 ? prev + 1 : 0));
+  };
+
+  const handleDotClick = (e: React.MouseEvent, index: number) => {
+    e.stopPropagation();
+    setCurrentImageIndex(index);
+  };
 
   return (
     <Card
@@ -27,27 +49,75 @@ export const ListingCard = ({ listing }: ListingCardProps) => {
       onClick={() => navigate(`/listing/${listing.id}`)}
     >
       <div className="relative aspect-[4/3] overflow-hidden bg-muted">
-        {listing.listing_images?.[0] ? (
-          <img
-            src={listing.listing_images[0].image_url}
-            alt={listing.title}
-            className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300"
-          />
+        {images.length > 0 ? (
+          <>
+            <img
+              src={images[currentImageIndex]?.image_url || images[0]?.image_url}
+              alt={listing.title}
+              className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300"
+            />
+
+            {hasMultipleImages && (
+              <>
+                {/* Previous Image Arrow */}
+                <button
+                  type="button"
+                  onClick={handlePrevImage}
+                  className="absolute left-2 top-1/2 -translate-y-1/2 h-7 w-7 rounded-full bg-black/60 text-white flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity hover:bg-black/80 z-20"
+                  aria-label="Previous image"
+                >
+                  <ChevronLeft className="h-4 w-4" />
+                </button>
+
+                {/* Next Image Arrow */}
+                <button
+                  type="button"
+                  onClick={handleNextImage}
+                  className="absolute right-2 top-1/2 -translate-y-1/2 h-7 w-7 rounded-full bg-black/60 text-white flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity hover:bg-black/80 z-20"
+                  aria-label="Next image"
+                >
+                  <ChevronRight className="h-4 w-4" />
+                </button>
+
+                {/* Dots indicator */}
+                <div className="absolute bottom-2 left-0 right-0 flex justify-center items-center gap-1.5 z-20">
+                  {images.map((_, idx) => (
+                    <button
+                      key={idx}
+                      type="button"
+                      onClick={(e) => handleDotClick(e, idx)}
+                      className={`h-2 rounded-full transition-all ${
+                        idx === currentImageIndex
+                          ? "w-4 bg-white shadow-md"
+                          : "w-2 bg-white/60 hover:bg-white"
+                      }`}
+                      aria-label={`Show image ${idx + 1}`}
+                    />
+                  ))}
+                </div>
+
+                {/* Image counter badge */}
+                <div className="absolute top-2 right-12 z-20 bg-black/60 text-white text-[10px] font-semibold px-2 py-0.5 rounded-full backdrop-blur-sm pointer-events-none">
+                  {currentImageIndex + 1}/{images.length}
+                </div>
+              </>
+            )}
+          </>
         ) : (
           <div className="w-full h-full flex items-center justify-center text-muted-foreground">
             No image
           </div>
         )}
-        
-        <div className="absolute top-2 left-2 flex flex-col gap-2">
+
+        <div className="absolute top-2 left-2 flex flex-col gap-2 z-20">
           {listing.is_featured && (
             <Badge className="bg-accent text-accent-foreground shadow-sm">
               Featured
             </Badge>
           )}
         </div>
-        
-        <div className="absolute top-2 right-2">
+
+        <div className="absolute top-2 right-2 z-20">
           <FavoriteButton listingId={listing.id} />
         </div>
       </div>

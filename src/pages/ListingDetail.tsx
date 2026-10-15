@@ -5,15 +5,27 @@ import Footer from "@/components/Footer";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Card, CardContent } from "@/components/ui/card";
-import { MapPin, Phone, Mail, Calendar, ArrowLeft, Star, MessageCircle } from "lucide-react";
+import { MapPin, Phone, Mail, Calendar, ArrowLeft, Star, MessageCircle, ChevronLeft, ChevronRight } from "lucide-react";
 import { toast } from "sonner";
 import { supabase } from "@/integrations/supabase/client";
+
+import { useAuth } from "@/hooks/useAuth";
 
 const ListingDetail = () => {
   const { id } = useParams();
   const navigate = useNavigate();
+  const { user } = useAuth();
+  const [isAdmin, setIsAdmin] = useState(false);
   const [listing, setListing] = useState<any>(null);
   const [currentImageIndex, setCurrentImageIndex] = useState(0);
+
+  useEffect(() => {
+    if (user?.id) {
+      supabase.rpc("has_role", { _user_id: user.id, _role: "admin" }).then(({ data }) => {
+        if (data) setIsAdmin(true);
+      });
+    }
+  }, [user]);
 
   useEffect(() => {
     const fetchListing = async () => {
@@ -30,11 +42,18 @@ const ListingDetail = () => {
           listing_images(image_url, display_order)
         `)
         .eq("id", id)
-        .eq("status", "active")
         .single();
 
       if (error || !data) {
         toast.error("Listing not found");
+        navigate("/");
+        return;
+      }
+
+      // If listing is not active and viewer is neither owner nor admin, don't show
+      const isOwnerOrAdmin = (user && user.id === data.user_id) || isAdmin;
+      if (data.status !== "active" && !isOwnerOrAdmin) {
+        toast.error("Listing is currently under review");
         navigate("/");
         return;
       }
@@ -65,7 +84,7 @@ const ListingDetail = () => {
     };
 
     fetchListing();
-  }, [id, navigate]);
+  }, [id, user, isAdmin, navigate]);
 
   if (!listing) {
     return (
@@ -105,10 +124,33 @@ const ListingDetail = () => {
                       className="w-full h-full object-cover"
                     />
                     {listing.isFeatured && (
-                      <Badge className="absolute top-4 right-4 bg-accent text-accent-foreground">
+                      <Badge className="absolute top-4 right-4 bg-accent text-accent-foreground z-10">
                         <Star className="h-3 w-3 mr-1 fill-current" />
                         Featured
                       </Badge>
+                    )}
+                    {listing.images.length > 1 && (
+                      <>
+                        <button
+                          type="button"
+                          onClick={() => setCurrentImageIndex((prev) => (prev > 0 ? prev - 1 : listing.images.length - 1))}
+                          className="absolute left-3 top-1/2 -translate-y-1/2 h-10 w-10 rounded-full bg-black/60 text-white flex items-center justify-center hover:bg-black/85 transition-colors shadow-lg z-10"
+                          aria-label="Previous image"
+                        >
+                          <ChevronLeft className="h-6 w-6" />
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => setCurrentImageIndex((prev) => (prev < listing.images.length - 1 ? prev + 1 : 0))}
+                          className="absolute right-3 top-1/2 -translate-y-1/2 h-10 w-10 rounded-full bg-black/60 text-white flex items-center justify-center hover:bg-black/85 transition-colors shadow-lg z-10"
+                          aria-label="Next image"
+                        >
+                          <ChevronRight className="h-6 w-6" />
+                        </button>
+                        <div className="absolute bottom-3 right-3 bg-black/60 text-white text-xs px-2.5 py-1 rounded-full font-medium backdrop-blur-sm z-10">
+                          {currentImageIndex + 1} / {listing.images.length}
+                        </div>
+                      </>
                     )}
                   </>
                 ) : (
@@ -143,6 +185,27 @@ const ListingDetail = () => {
             {/* Details */}
             <Card>
               <CardContent className="p-6 space-y-4">
+                {((user && user.id === listing.user_id) || isAdmin) && (
+                  <div className="bg-primary/5 border border-primary/20 rounded-xl p-3.5 mb-2 flex flex-col sm:flex-row sm:items-center justify-between gap-3 shadow-xs">
+                    <div className="space-y-1">
+                      <div className="flex items-center gap-2 flex-wrap">
+                        <span className="text-xs font-bold text-muted-foreground uppercase tracking-wider">Your Reference IDs:</span>
+                        <Badge variant="outline" className="font-mono font-bold text-primary border-primary/40 bg-background text-xs">
+                          Listing ID: {listing.listing_id || "LST-..."}
+                        </Badge>
+                        {listing.customer_id && (
+                          <Badge variant="outline" className="font-mono font-bold text-purple-700 dark:text-purple-300 border-purple-400 bg-background text-xs">
+                            Customer ID: {listing.customer_id}
+                          </Badge>
+                        )}
+                      </div>
+                      <p className="text-[11px] text-muted-foreground">
+                        Only visible to you (listing owner). Quote these IDs when contacting support or reporting an issue.
+                      </p>
+                    </div>
+                  </div>
+                )}
+
                 <div className="flex items-start justify-between">
                   <div className="space-y-2">
                     <h1 className="text-3xl font-bold text-foreground flex flex-wrap items-center gap-2">

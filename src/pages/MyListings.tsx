@@ -29,6 +29,8 @@ interface Listing {
   is_featured: boolean;
   status: string;
   attributes?: any;
+  listing_id?: string;
+  customer_id?: string;
   listing_images: { image_url: string }[];
   categories: { name: string; slug: string } | null;
   invoices?: { id: string; file_url: string; invoice_number: string }[];
@@ -38,6 +40,7 @@ const MyListings = () => {
   const navigate = useNavigate();
   const { user, loading: authLoading } = useAuth();
   const [listings, setListings] = useState<Listing[]>([]);
+  const [customerId, setCustomerId] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
   const [deleteId, setDeleteId] = useState<string | null>(null);
   const [isAdmin, setIsAdmin] = useState(false);
@@ -69,6 +72,19 @@ const MyListings = () => {
 
   const fetchMyListings = async () => {
     try {
+      // Fetch Customer ID from profile if exists
+      if (user?.id) {
+        const { data: profileData } = await supabase
+          .from("profiles")
+          .select("customer_id")
+          .eq("user_id", user.id)
+          .maybeSingle();
+
+        if (profileData?.customer_id) {
+          setCustomerId(profileData.customer_id);
+        }
+      }
+
       const { data, error } = await supabase
         .from("listings")
         .select(`
@@ -80,6 +96,8 @@ const MyListings = () => {
           is_featured,
           status,
           attributes,
+          listing_id,
+          customer_id,
           listing_images(image_url),
           categories(name, slug)
         `)
@@ -153,11 +171,29 @@ const MyListings = () => {
     <div className="min-h-screen bg-background">
       <Header />
       <main className="container mx-auto px-4 py-8">
-        <div className="mb-8">
-          <h1 className="text-3xl font-bold text-foreground mb-2">My Listings</h1>
-          <p className="text-muted-foreground">
-            Manage your posted ads
-          </p>
+        <div className="mb-8 flex flex-col md:flex-row md:items-center md:justify-between gap-4">
+          <div>
+            <h1 className="text-3xl font-bold text-foreground mb-2">My Listings</h1>
+            <p className="text-muted-foreground">
+              Manage your posted ads
+            </p>
+          </div>
+          {customerId && (
+            <div className="bg-card border border-border/80 rounded-xl px-4 py-3 shadow-xs flex items-center gap-3">
+              <div className="h-9 w-9 rounded-lg bg-primary/10 flex items-center justify-center text-primary font-bold text-xs">
+                CUS
+              </div>
+              <div>
+                <div className="flex items-center gap-2">
+                  <span className="text-xs uppercase font-semibold text-muted-foreground tracking-wider">Customer ID:</span>
+                  <Badge variant="outline" className="font-mono font-bold text-primary border-primary/40 bg-background text-xs">
+                    {customerId}
+                  </Badge>
+                </div>
+                <p className="text-[11px] text-muted-foreground">Quote this ID when contacting support or reporting an error</p>
+              </div>
+            </div>
+          )}
         </div>
 
         {listings.length === 0 ? (
@@ -187,6 +223,11 @@ const MyListings = () => {
                       No image
                     </div>
                   )}
+                  {listing.listing_id && (
+                    <Badge variant="secondary" className="absolute top-2 right-2 font-mono text-[11px] font-bold bg-background/90 backdrop-blur-xs text-foreground shadow-xs border">
+                      {listing.listing_id}
+                    </Badge>
+                  )}
                   {listing.is_featured && (
                     <Badge className="absolute top-2 left-2 bg-accent text-accent-foreground">
                       Featured
@@ -199,6 +240,16 @@ const MyListings = () => {
                   )}
                 </div>
                 <div className="p-4">
+                  <div className="flex items-center justify-between text-xs text-muted-foreground mb-1.5">
+                    <span className="font-mono text-[11px] font-semibold text-primary">
+                      {listing.listing_id || "Listing ID"}
+                    </span>
+                    {listing.categories?.name && (
+                      <span className="text-[11px] bg-muted px-1.5 py-0.5 rounded text-muted-foreground">
+                        {listing.categories.name}
+                      </span>
+                    )}
+                  </div>
                   <h3 className="font-semibold text-lg mb-2 flex items-center gap-1.5 line-clamp-1">
                     <span className="truncate">{listing.title}</span>
                     {listing.attributes?.verificationStatus === 'verified' && (

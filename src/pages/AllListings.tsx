@@ -76,7 +76,7 @@ const AllListings = () => {
           attributes,
           created_at,
           category_id,
-          listing_images(image_url),
+          listing_images(image_url, display_order),
           categories(name)
         `)
         .eq("status", "active")

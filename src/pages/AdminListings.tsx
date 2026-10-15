@@ -15,10 +15,13 @@ interface Listing {
   title: string;
   price: number;
   status: string;
+  listing_id?: string;
+  customer_id?: string;
   created_at: string;
   categories: { name: string; slug: string };
   profiles: { name: string; email: string };
   attributes?: any;
+  listing_images?: { image_url: string; display_order?: number }[];
 }
 
 const AdminListings = () => {
@@ -88,11 +91,14 @@ const AdminListings = () => {
           price,
           status,
           created_at,
+          listing_id,
+          customer_id,
           is_featured,
           payment_proof,
           attributes,
           categories(name, slug),
-          profiles(name, email)
+          profiles(name, email),
+          listing_images(image_url, display_order)
         `)
         .order("created_at", { ascending: false });
 
@@ -309,6 +315,16 @@ const AdminListings = () => {
                   >
                     <div className="flex-1">
                       <div className="flex items-center gap-2 mb-1 flex-wrap">
+                        {listing.listing_id && (
+                          <Badge variant="outline" className="font-mono text-xs font-bold bg-blue-50 text-blue-700 dark:bg-blue-950/60 dark:text-blue-300 border-blue-200">
+                            {listing.listing_id}
+                          </Badge>
+                        )}
+                        {listing.customer_id && (
+                          <Badge variant="outline" className="font-mono text-xs font-bold bg-purple-50 text-purple-700 dark:bg-purple-950/60 dark:text-purple-300 border-purple-200">
+                            {listing.customer_id}
+                          </Badge>
+                        )}
                         <h3 className="font-semibold">{listing.title}</h3>
                         <Badge variant={listing.status === "active" ? "default" : listing.status === "rejected" ? "destructive" : "secondary"}>
                           {listing.status}
@@ -328,6 +344,36 @@ const AdminListings = () => {
                       <p className="text-xs text-muted-foreground">
                         {new Date(listing.created_at).toLocaleDateString()}
                       </p>
+
+                      {/* Display listing images in admin portal */}
+                      {listing.listing_images && listing.listing_images.length > 0 && (
+                        <div className="flex items-center gap-2 mt-2.5">
+                          {listing.listing_images
+                            .sort((a: any, b: any) => (a.display_order ?? 0) - (b.display_order ?? 0))
+                            .map((img: any, idx: number) => (
+                              <a
+                                key={idx}
+                                href={img.image_url}
+                                target="_blank"
+                                rel="noopener noreferrer"
+                                className="relative block h-14 w-20 rounded-md border overflow-hidden hover:opacity-80 transition-opacity bg-muted shadow-xs"
+                                title={`View Image ${idx + 1}`}
+                              >
+                                <img
+                                  src={img.image_url}
+                                  alt={`${listing.title} ${idx + 1}`}
+                                  className="h-full w-full object-cover"
+                                />
+                                <span className="absolute bottom-0 right-0 bg-black/70 text-white text-[9px] font-semibold px-1 py-0.5 rounded-tl">
+                                  {idx + 1}
+                                </span>
+                              </a>
+                            ))}
+                          <span className="text-xs font-medium text-muted-foreground">
+                            ({listing.listing_images.length} {listing.listing_images.length === 1 ? 'image' : 'images'})
+                          </span>
+                        </div>
+                      )}
                     </div>
                     <div className="flex gap-2">
                       <Button

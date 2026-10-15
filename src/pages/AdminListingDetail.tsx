@@ -17,6 +17,8 @@ interface ListingDetail {
   location_city: string;
   location_locality: string | null;
   status: string;
+  listing_id?: string;
+  customer_id?: string;
   is_featured: boolean;
   payment_proof: string | null;
   created_at: string;
@@ -176,7 +178,17 @@ const AdminListingDetail = () => {
             <ArrowLeft className="h-4 w-4 mr-2" />
             Back
           </Button>
-          <div className="flex gap-2">
+          <div className="flex gap-2 flex-wrap items-center">
+            {listing.listing_id && (
+              <Badge variant="outline" className="font-mono text-xs font-bold bg-blue-50 text-blue-700 dark:bg-blue-950/60 dark:text-blue-300 border-blue-200">
+                {listing.listing_id}
+              </Badge>
+            )}
+            {listing.customer_id && (
+              <Badge variant="outline" className="font-mono text-xs font-bold bg-purple-50 text-purple-700 dark:bg-purple-950/60 dark:text-purple-300 border-purple-200">
+                {listing.customer_id}
+              </Badge>
+            )}
             <Button variant="outline" onClick={() => navigate(`/admin/listings/edit/${listing.id}`)}>
               <Edit className="h-4 w-4 mr-2" />
               Edit

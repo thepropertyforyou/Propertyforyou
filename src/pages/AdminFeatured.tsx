@@ -28,6 +28,8 @@ interface FeaturedRequest {
   price: number;
   is_featured: boolean;
   status: string;
+  listing_id?: string;
+  customer_id?: string;
   payment_proof: string | null;
   created_at: string;
   user_id: string;
@@ -105,6 +107,8 @@ const AdminFeatured = () => {
           is_featured,
           payment_proof,
           status,
+          listing_id,
+          customer_id,
           created_at,
           user_id,
           seller_phone,
@@ -385,7 +389,17 @@ const AdminFeatured = () => {
                   className="flex items-center justify-between p-4 border rounded-lg"
                 >
                   <div className="flex-1">
-                    <div className="flex items-center gap-2 mb-1">
+                    <div className="flex items-center gap-2 mb-1 flex-wrap">
+                      {request.listing_id && (
+                        <Badge variant="outline" className="font-mono text-xs font-bold bg-blue-50 text-blue-700 dark:bg-blue-950/60 dark:text-blue-300 border-blue-200">
+                          {request.listing_id}
+                        </Badge>
+                      )}
+                      {request.customer_id && (
+                        <Badge variant="outline" className="font-mono text-xs font-bold bg-purple-50 text-purple-700 dark:bg-purple-950/60 dark:text-purple-300 border-purple-200">
+                          {request.customer_id}
+                        </Badge>
+                      )}
                       <h3 className="font-semibold">{request.title}</h3>
                       <Badge variant={request.is_featured ? "default" : "secondary"}>
                         {request.is_featured ? "Featured" : "Not Featured"}

@@ -17,6 +17,14 @@ import { supabase } from "@/integrations/supabase/client";
 import { Card } from "@/components/ui/card";
 import { ImageCropperDialog } from "@/components/common/ImageCropperDialog";
 import { statesAndDistricts } from "@/data/india-locations";
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogHeader,
+  DialogTitle,
+  DialogFooter,
+} from "@/components/ui/dialog";
 
 type PostingType = "free" | "featured" | "popup";
 
@@ -55,6 +63,31 @@ const PostAd = () => {
   const [bookedSlots, setBookedSlots] = useState<number[]>([]);
   const [selectedSlot, setSelectedSlot] = useState<number | null>(null);
   const [pricingPlans, setPricingPlans] = useState<any[]>([]);
+
+  // Confirmation result
+  const [submittedResult, setSubmittedResult] = useState<{
+    listingId: string;
+    customerId: string;
+    title: string;
+    internalId: string;
+    type: string;
+  } | null>(null);
+  const [existingCustomerId, setExistingCustomerId] = useState<string | null>(null);
+
+  useEffect(() => {
+    if (user?.id) {
+      supabase
+        .from("profiles")
+        .select("customer_id")
+        .eq("user_id", user.id)
+        .maybeSingle()
+        .then(({ data }) => {
+          if (data?.customer_id) {
+            setExistingCustomerId(data.customer_id);
+          }
+        });
+    }
+  }, [user]);
 
   // Multi-step flow for Featured and Popup Ads
   const [currentStep, setCurrentStep] = useState<"form" | "plan" | "schedule" | "confirm">("form");
@@ -396,9 +429,10 @@ const PostAd = () => {
   const handleImageSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (file) {
-      const maxImages = postingType === "free" ? 1 : 6;
-      if (uploadedImageUrls.length >= maxImages) {
-        toast.error(`Maximum ${maxImages} image${maxImages === 1 ? '' : 's'} allowed`);
+      const maxAllowed = postingType === "free" ? 2 : 6;
+      if (uploadedImageUrls.length >= maxAllowed) {
+        toast.error(`Maximum ${maxAllowed} images allowed`);
+        e.target.value = '';
         return;
       }
       const reader = new FileReader();
@@ -410,6 +444,14 @@ const PostAd = () => {
     }
     // Reset input
     e.target.value = '';
+  };
+
+  const handleUploadAreaClick = (e: React.MouseEvent) => {
+    const maxAllowed = postingType === "free" ? 2 : 6;
+    if (uploadedImageUrls.length >= maxAllowed) {
+      e.preventDefault();
+      toast.error(`Maximum ${maxAllowed} images allowed`);
+    }
   };
 
   const handleCropComplete = async (croppedFile: File) => {
@@ -680,6 +722,21 @@ const PostAd = () => {
       // Clear saved progress on successful submission
       localStorage.removeItem("post_ad_progress");
 
+      const assignedListingId = listing.listing_id || "LST-0001";
+      let assignedCustomerId = listing.customer_id;
+      if (!assignedCustomerId && user?.id) {
+        const { data: pData } = await supabase.from("profiles").select("customer_id").eq("user_id", user.id).single();
+        if (pData?.customer_id) assignedCustomerId = pData.customer_id;
+      }
+
+      setSubmittedResult({
+        listingId: assignedListingId,
+        customerId: assignedCustomerId || existingCustomerId || "CUS-0001",
+        title,
+        internalId: listing.id,
+        type: postingType,
+      });
+
       if (postingType === "popup") {
         toast.success("Popup ad submitted! Sent to admin portal for review.");
       } else if (postingType === "featured") {
@@ -687,7 +744,6 @@ const PostAd = () => {
       } else {
         toast.success("Free ad posted!");
       }
-      navigate("/");
     } catch (error: any) {
       console.error("Error:", error);
       toast.error(error?.message || error?.details || "Failed to post ad. Please try again.");
@@ -730,7 +786,7 @@ const PostAd = () => {
     );
   }
 
-  const maxImages = postingType === "free" ? 1 : 6;
+  const maxImages = postingType === "free" ? 2 : 6;
 
   return (
     <div className="min-h-screen bg-background">
@@ -754,7 +810,7 @@ const PostAd = () => {
               <TableBody>
                 <TableRow>
                   <TableCell className="font-medium">Images</TableCell>
-                  <TableCell className="text-center">1</TableCell>
+                  <TableCell className="text-center">2</TableCell>
                   <TableCell className="text-center bg-yellow-50 dark:bg-yellow-950">6</TableCell>
                   <TableCell className="text-center bg-purple-50 dark:bg-purple-950">6</TableCell>
                 </TableRow>
@@ -799,7 +855,7 @@ const PostAd = () => {
 
         {/* Posting Type Selection */}
         <div className="grid md:grid-cols-3 gap-6 mb-8">
-          <Card className={`p-6 cursor-pointer transition-all hover:shadow-lg ${postingType === "free" ? "border-2 border-primary shadow-md" : "border-2 border-transparent"}`} onClick={() => { setPostingType("free"); setUploadedImageUrls(prev => prev.slice(0, 1)); setImagePreviews(prev => prev.slice(0, 1)); setCurrentStep("form"); }}>
+          <Card className={`p-6 cursor-pointer transition-all hover:shadow-lg ${postingType === "free" ? "border-2 border-primary shadow-md" : "border-2 border-transparent"}`} onClick={() => { setPostingType("free"); setUploadedImageUrls(prev => prev.slice(0, 2)); setImagePreviews(prev => prev.slice(0, 2)); setCurrentStep("form"); }}>
             <div className="flex items-start justify-between">
               <div className="space-y-2 flex-1">
                 <h3 className="text-xl font-bold flex items-center gap-2"><ImageIcon className="h-5 w-5" />Free</h3>
@@ -996,49 +1052,68 @@ const PostAd = () => {
 
             {/* Images */}
             <Card className="p-6 mb-6">
-              <h2 className="text-xl font-semibold mb-4">Upload Images * ({uploadedImageUrls.length}/{maxImages})</h2>
+              <div className="flex items-center justify-between mb-4">
+                <h2 className="text-xl font-semibold">Upload Images *</h2>
+                <Badge variant={uploadedImageUrls.length >= maxImages ? "secondary" : "outline"} className="text-sm font-semibold">
+                  {uploadedImageUrls.length}/{maxImages}
+                </Badge>
+              </div>
               <div className="space-y-4">
-                <div className="border-2 border-dashed rounded-lg p-8 text-center relative">
+                <div 
+                  className={`border-2 border-dashed rounded-lg p-8 text-center relative transition-colors ${
+                    uploadedImageUrls.length >= maxImages ? "bg-muted/40 cursor-pointer" : "hover:bg-muted/20 cursor-pointer"
+                  }`}
+                  onClick={handleUploadAreaClick}
+                >
                   <input
                     type="file"
                     id="image-upload"
                     accept="image/*"
                     onChange={handleImageSelect}
                     className="hidden"
-                    disabled={uploadedImageUrls.length >= maxImages || isUploadingImage}
+                    disabled={isUploadingImage}
                   />
                   <label
-                    htmlFor="image-upload"
-                    className={`cursor-pointer flex flex-col items-center ${
-                      uploadedImageUrls.length >= maxImages || isUploadingImage ? "opacity-50 cursor-not-allowed" : ""
-                    }`}
+                    htmlFor={uploadedImageUrls.length >= maxImages ? undefined : "image-upload"}
+                    className="cursor-pointer flex flex-col items-center"
                   >
                     {isUploadingImage ? (
                       <Loader2 className="h-12 w-12 text-primary animate-spin mb-2" />
                     ) : (
                       <Upload className="h-12 w-12 text-muted-foreground mb-2" />
                     )}
-                    <span className="text-sm font-medium text-foreground">
+                    <span className="text-base font-semibold text-foreground">
                       {isUploadingImage
                         ? "Uploading & saving image..."
-                        : uploadedImageUrls.length >= maxImages
-                        ? `Max ${maxImages} reached`
-                        : `Upload (Max ${maxImages})`}
+                        : `Upload (Max ${maxImages}) (${uploadedImageUrls.length}/${maxImages})`}
                     </span>
                     <span className="text-xs text-muted-foreground mt-1">
-                      Images are automatically cropped and securely saved
+                      {uploadedImageUrls.length >= maxImages
+                        ? `Maximum ${maxImages} images reached. Remove an image to replace it.`
+                        : "Images are automatically cropped and securely saved"}
                     </span>
                   </label>
                 </div>
                 {imagePreviews.length > 0 && (
-                  <div className="grid grid-cols-3 md:grid-cols-5 gap-4">
+                  <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-4 pt-2">
                     {imagePreviews.map((preview, index) => (
-                      <div key={index} className="relative group">
-                        <img src={preview} alt={`Preview ${index + 1}`} className="w-full h-24 object-cover rounded-lg shadow-md" />
+                      <div key={index} className="relative group border rounded-lg overflow-hidden shadow-sm bg-muted">
+                        <img 
+                          src={preview} 
+                          alt={`Preview ${index + 1}`} 
+                          className="w-full h-28 object-cover" 
+                        />
+                        <div className="absolute bottom-1 left-1 bg-black/60 text-white text-[10px] px-1.5 py-0.5 rounded font-medium">
+                          Image {index + 1}
+                        </div>
                         <button
                           type="button"
-                          onClick={() => removeImage(index)}
-                          className="absolute top-1 right-1 bg-destructive text-destructive-foreground rounded-full p-1 opacity-0 group-hover:opacity-100 transition-opacity"
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            removeImage(index);
+                          }}
+                          className="absolute top-1.5 right-1.5 bg-destructive text-destructive-foreground rounded-full p-1 shadow-md hover:bg-destructive/90 transition-transform active:scale-95"
+                          title="Remove image"
                         >
                           <X className="h-4 w-4" />
                         </button>
@@ -1486,6 +1561,12 @@ const PostAd = () => {
                   <span className="text-muted-foreground text-xs uppercase">Contact:</span>
                   <p className="font-medium mt-0.5">{formData.sellerPhone}</p>
                 </div>
+                {existingCustomerId && (
+                  <div>
+                    <span className="text-muted-foreground text-xs uppercase">Customer ID:</span>
+                    <p className="font-mono font-bold text-primary text-sm mt-0.5">{existingCustomerId}</p>
+                  </div>
+                )}
               </div>
 
               <div className="bg-muted/50 p-4 rounded-lg text-xs text-muted-foreground space-y-1">
@@ -1522,6 +1603,66 @@ const PostAd = () => {
           </div>
         )}
       </main>
+
+      {/* Confirmation & Reference IDs Dialog */}
+      <Dialog open={!!submittedResult} onOpenChange={() => {}}>
+        <DialogContent className="sm:max-w-md">
+          <DialogHeader className="text-center sm:text-center">
+            <div className="mx-auto my-2 w-12 h-12 rounded-full bg-green-100 dark:bg-green-950 flex items-center justify-center text-green-600">
+              <Check className="h-6 w-6 stroke-[3]" />
+            </div>
+            <DialogTitle className="text-2xl font-bold">Listing Confirmed!</DialogTitle>
+            <DialogDescription>
+              Your listing has been submitted successfully. Please save your reference IDs below.
+            </DialogDescription>
+          </DialogHeader>
+
+          <div className="space-y-4 my-2">
+            <div className="bg-muted/50 rounded-lg p-4 border border-border space-y-3">
+              <div className="flex items-center justify-between pb-2 border-b border-border/60">
+                <span className="text-sm text-muted-foreground font-medium">Listing ID:</span>
+                <Badge variant="outline" className="font-mono text-sm font-bold bg-background text-primary border-primary/40 px-2.5 py-0.5">
+                  {submittedResult?.listingId}
+                </Badge>
+              </div>
+
+              <div className="flex items-center justify-between">
+                <span className="text-sm text-muted-foreground font-medium">Customer ID:</span>
+                <Badge variant="outline" className="font-mono text-sm font-bold bg-background text-purple-700 dark:text-purple-300 border-purple-400 px-2.5 py-0.5">
+                  {submittedResult?.customerId}
+                </Badge>
+              </div>
+            </div>
+
+            <div className="bg-amber-50 dark:bg-amber-950/30 border border-amber-200 dark:border-amber-800 rounded-md p-3 text-xs text-amber-800 dark:text-amber-200">
+              💡 <strong>Important:</strong> Quote your <strong>Customer ID</strong> and <strong>Listing ID</strong> whenever you contact support or need to report an error. You can also view them anytime in <strong>My Account</strong>.
+            </div>
+          </div>
+
+          <DialogFooter className="flex flex-col sm:flex-row gap-2">
+            <Button
+              variant="outline"
+              className="w-full sm:w-auto flex-1"
+              onClick={() => {
+                const id = submittedResult?.internalId;
+                setSubmittedResult(null);
+                navigate(`/listing/${id}`);
+              }}
+            >
+              View Listing
+            </Button>
+            <Button
+              className="w-full sm:w-auto flex-1"
+              onClick={() => {
+                setSubmittedResult(null);
+                navigate("/my-listings");
+              }}
+            >
+              Go to My Account
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
       <Footer />
     </div>
   );

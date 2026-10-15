@@ -6,6 +6,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { useToast } from "@/hooks/use-toast";
 import { Trash2 } from "lucide-react";
 import { useAuth } from "@/hooks/useAuth";
+import { Badge } from "@/components/ui/badge";
 import AdminLayout from "@/components/admin/AdminLayout";
 import {
   Table,
@@ -18,9 +19,11 @@ import {
 
 interface User {
   id: string;
+  user_id?: string;
   name: string;
   email: string;
   phone: string;
+  customer_id?: string | null;
   created_at: string;
   listing_count?: number;
 }
@@ -168,6 +171,7 @@ const AdminUsers = () => {
             <Table>
               <TableHeader>
                 <TableRow>
+                  <TableHead>Customer ID</TableHead>
                   <TableHead>Name</TableHead>
                   <TableHead>Email</TableHead>
                   <TableHead>Phone</TableHead>
@@ -179,6 +183,15 @@ const AdminUsers = () => {
               <TableBody>
                 {users.map((user) => (
                   <TableRow key={user.id}>
+                    <TableCell>
+                      {user.customer_id ? (
+                        <Badge variant="outline" className="font-mono text-xs font-bold bg-purple-50 text-purple-700 dark:bg-purple-950/60 dark:text-purple-300 border-purple-200">
+                          {user.customer_id}
+                        </Badge>
+                      ) : (
+                        <span className="text-muted-foreground text-xs italic">Not a poster</span>
+                      )}
+                    </TableCell>
                     <TableCell className="font-medium">{user.name}</TableCell>
                     <TableCell>{user.email}</TableCell>
                     <TableCell>{user.phone}</TableCell>
@@ -188,7 +201,7 @@ const AdminUsers = () => {
                       <Button
                         size="sm"
                         variant="destructive"
-                        onClick={() => handleDeleteUser(user.id)}
+                        onClick={() => handleDeleteUser(user.id || user.user_id || "")}
                       >
                         <Trash2 className="h-4 w-4" />
                       </Button>

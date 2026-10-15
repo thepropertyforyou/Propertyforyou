@@ -36,6 +36,8 @@ interface PopupSchedule {
     price: number;
     user_id: string;
     seller_phone: string;
+    listing_id?: string;
+    customer_id?: string;
     attributes?: any;
     profiles: { name: string; email: string };
   };
@@ -142,6 +144,8 @@ const AdminPopupAds = () => {
             price,
             user_id,
             seller_phone,
+            listing_id,
+            customer_id,
             attributes,
             profiles (name, email)
           )
@@ -490,7 +494,17 @@ const AdminPopupAds = () => {
                       className="flex items-center justify-between p-4 border rounded-lg hover:bg-muted/50 transition-colors"
                     >
                       <div className="flex-1">
-                        <div className="flex items-center gap-2 mb-1">
+                        <div className="flex items-center gap-2 mb-1 flex-wrap">
+                          {schedule.listings?.listing_id && (
+                            <Badge variant="outline" className="font-mono text-xs font-bold bg-blue-50 text-blue-700 dark:bg-blue-950/60 dark:text-blue-300 border-blue-200">
+                              {schedule.listings.listing_id}
+                            </Badge>
+                          )}
+                          {schedule.listings?.customer_id && (
+                            <Badge variant="outline" className="font-mono text-xs font-bold bg-purple-50 text-purple-700 dark:bg-purple-950/60 dark:text-purple-300 border-purple-200">
+                              {schedule.listings.customer_id}
+                            </Badge>
+                          )}
                           <Badge variant="outline">Slot {schedule.slot_number}</Badge>
                           <h3 className="font-semibold">{schedule.listings.title}</h3>
                           <Badge 

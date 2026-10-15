@@ -25,6 +25,8 @@ interface Message {
   message: string;
   created_at: string;
   read: boolean;
+  customer_id?: string;
+  listing_id?: string;
 }
 
 const AdminMessages = () => {
@@ -84,9 +86,45 @@ const AdminMessages = () => {
         description: "Failed to fetch messages",
         variant: "destructive",
       });
-    } else {
-      setMessages(data || []);
+      setLoading(false);
+      return;
     }
+
+    // Lookup customer_id by email or phone from profiles
+    const { data: profiles } = await supabase
+      .from("profiles")
+      .select("email, phone, customer_id")
+      .not("customer_id", "is", null);
+
+    const emailToCus: Record<string, string> = {};
+    const phoneToCus: Record<string, string> = {};
+
+    if (profiles) {
+      profiles.forEach((p) => {
+        if (p.customer_id) {
+          if (p.email) emailToCus[p.email.toLowerCase().trim()] = p.customer_id;
+          if (p.phone) {
+            const clean = p.phone.replace(/[^0-9]/g, "");
+            if (clean) phoneToCus[clean] = p.customer_id;
+          }
+        }
+      });
+    }
+
+    const enriched = (data || []).map((msg: any) => {
+      const cleanPhone = (msg.contact_number || "").replace(/[^0-9]/g, "");
+      const cleanEmail = (msg.email || "").toLowerCase().trim();
+      const cusMatch = msg.message?.match(/CUS-\d+/i);
+      const lstMatch = msg.message?.match(/LST-\d+/i);
+
+      return {
+        ...msg,
+        customer_id: msg.customer_id || (cusMatch ? cusMatch[0].toUpperCase() : undefined) || emailToCus[cleanEmail] || phoneToCus[cleanPhone],
+        listing_id: msg.listing_id || (lstMatch ? lstMatch[0].toUpperCase() : undefined),
+      };
+    });
+
+    setMessages(enriched);
     setLoading(false);
   };
 
@@ -148,6 +186,7 @@ const AdminMessages = () => {
               <TableHeader>
                 <TableRow>
                   <TableHead>Status</TableHead>
+                  <TableHead>Customer ID</TableHead>
                   <TableHead>Name</TableHead>
                   <TableHead>Contact</TableHead>
                   <TableHead>Email</TableHead>
@@ -164,6 +203,22 @@ const AdminMessages = () => {
                       ) : (
                         <Badge>New</Badge>
                       )}
+                    </TableCell>
+                    <TableCell>
+                      <div className="flex flex-col gap-1">
+                        {message.customer_id ? (
+                          <Badge variant="outline" className="font-mono text-xs font-bold bg-purple-50 text-purple-700 dark:bg-purple-950/60 dark:text-purple-300 border-purple-200 w-fit">
+                            {message.customer_id}
+                          </Badge>
+                        ) : (
+                          <span className="text-muted-foreground text-xs italic">—</span>
+                        )}
+                        {message.listing_id && (
+                          <Badge variant="outline" className="font-mono text-[11px] font-bold bg-blue-50 text-blue-700 dark:bg-blue-950/60 dark:text-blue-300 border-blue-200 w-fit">
+                            {message.listing_id}
+                          </Badge>
+                        )}
+                      </div>
                     </TableCell>
                     <TableCell className="font-medium">{message.name}</TableCell>
                     <TableCell>{message.contact_number}</TableCell>
@@ -207,6 +262,20 @@ const AdminMessages = () => {
           </DialogHeader>
           {selectedMessage && (
             <div className="space-y-4">
+              {(selectedMessage.customer_id || selectedMessage.listing_id) && (
+                <div className="p-3 bg-muted/60 rounded-lg border flex items-center gap-2 flex-wrap">
+                  {selectedMessage.customer_id && (
+                    <Badge variant="outline" className="font-mono text-xs font-bold bg-purple-50 text-purple-700 dark:bg-purple-950/60 dark:text-purple-300 border-purple-200">
+                      Customer ID: {selectedMessage.customer_id}
+                    </Badge>
+                  )}
+                  {selectedMessage.listing_id && (
+                    <Badge variant="outline" className="font-mono text-xs font-bold bg-blue-50 text-blue-700 dark:bg-blue-950/60 dark:text-blue-300 border-blue-200">
+                      Listing ID: {selectedMessage.listing_id}
+                    </Badge>
+                  )}
+                </div>
+              )}
               <div>
                 <p className="text-sm font-medium text-muted-foreground">Name</p>
                 <p className="text-base">{selectedMessage.name}</p>

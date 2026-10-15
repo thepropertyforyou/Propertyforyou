@@ -25,6 +25,8 @@ interface PopupSchedule {
     price: number;
     description: string;
     location_city: string;
+    listing_id?: string;
+    customer_id?: string;
     profiles: { name: string; email: string; phone: string };
     listing_images: { image_url: string; display_order: number }[];
   };
@@ -97,6 +99,8 @@ const AdminPopupAdDetail = () => {
             price,
             description,
             location_city,
+            listing_id,
+            customer_id,
             profiles (name, email, phone),
             listing_images (image_url, display_order)
           )
@@ -187,6 +191,18 @@ const AdminPopupAdDetail = () => {
                 />
               )}
               <div>
+                <div className="flex items-center gap-2 mb-2 flex-wrap">
+                  {schedule.listings.listing_id && (
+                    <Badge variant="outline" className="font-mono text-xs font-bold bg-blue-50 text-blue-700 dark:bg-blue-950/60 dark:text-blue-300 border-blue-200">
+                      {schedule.listings.listing_id}
+                    </Badge>
+                  )}
+                  {schedule.listings.customer_id && (
+                    <Badge variant="outline" className="font-mono text-xs font-bold bg-purple-50 text-purple-700 dark:bg-purple-950/60 dark:text-purple-300 border-purple-200">
+                      {schedule.listings.customer_id}
+                    </Badge>
+                  )}
+                </div>
                 <h3 className="text-xl font-semibold">{schedule.listings.title}</h3>
                 <p className="text-2xl font-bold text-primary mt-2">
                   ₹{schedule.listings.price.toLocaleString()}

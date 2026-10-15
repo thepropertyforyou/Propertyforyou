@@ -86,7 +86,7 @@ const Properties = () => {
           is_featured,
           attributes,
           created_at,
-          listing_images(image_url),
+          listing_images(image_url, display_order),
           categories(name)
         `)
         .eq("category_id", categories.id)

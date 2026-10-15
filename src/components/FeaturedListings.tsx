@@ -36,7 +36,7 @@ const FeaturedListings = () => {
           location_locality,
           category_id,
           categories (name, slug),
-          listing_images (image_url)
+          listing_images (image_url, display_order)
         `)
         .eq("is_featured", true)
         .eq("status", "active")

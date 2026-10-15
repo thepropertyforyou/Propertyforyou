@@ -30,6 +30,8 @@ interface ExpertEnquiry {
   message: string;
   read: boolean;
   created_at: string;
+  customer_id?: string;
+  listing_id?: string;
   expert?: {
     name: string;
     category: string;
@@ -61,7 +63,34 @@ const AdminExpertEnquiries = () => {
       return;
     }
 
-    setEnquiries(data || []);
+    // Lookup customer_id by phone from profiles
+    const { data: profiles } = await supabase
+      .from("profiles")
+      .select("phone, customer_id")
+      .not("customer_id", "is", null);
+
+    const phoneToCus: Record<string, string> = {};
+    if (profiles) {
+      profiles.forEach((p) => {
+        if (p.phone && p.customer_id) {
+          const clean = p.phone.replace(/[^0-9]/g, "");
+          if (clean) phoneToCus[clean] = p.customer_id;
+        }
+      });
+    }
+
+    const enriched = (data || []).map((item: any) => {
+      const cleanPhone = (item.phone || "").replace(/[^0-9]/g, "");
+      const cusMatch = item.message?.match(/CUS-\d+/i);
+      const lstMatch = item.message?.match(/LST-\d+/i);
+      return {
+        ...item,
+        customer_id: item.customer_id || phoneToCus[cleanPhone] || (cusMatch ? cusMatch[0].toUpperCase() : undefined),
+        listing_id: item.listing_id || (lstMatch ? lstMatch[0].toUpperCase() : undefined),
+      };
+    });
+
+    setEnquiries(enriched);
     setLoading(false);
   };
 
@@ -153,6 +182,7 @@ const AdminExpertEnquiries = () => {
                 <TableHeader>
                   <TableRow>
                     <TableHead>Status</TableHead>
+                    <TableHead>Customer ID</TableHead>
                     <TableHead>User Name</TableHead>
                     <TableHead>Phone</TableHead>
                     <TableHead>Expert</TableHead>
@@ -167,6 +197,22 @@ const AdminExpertEnquiries = () => {
                         <Badge variant={enquiry.read ? "secondary" : "default"}>
                           {enquiry.read ? "Read" : "New"}
                         </Badge>
+                      </TableCell>
+                      <TableCell>
+                        <div className="flex flex-col gap-1">
+                          {enquiry.customer_id ? (
+                            <Badge variant="outline" className="font-mono text-xs font-bold bg-purple-50 text-purple-700 dark:bg-purple-950/60 dark:text-purple-300 border-purple-200 w-fit">
+                              {enquiry.customer_id}
+                            </Badge>
+                          ) : (
+                            <span className="text-muted-foreground text-xs italic">—</span>
+                          )}
+                          {enquiry.listing_id && (
+                            <Badge variant="outline" className="font-mono text-[11px] font-bold bg-blue-50 text-blue-700 dark:bg-blue-950/60 dark:text-blue-300 border-blue-200 w-fit">
+                              {enquiry.listing_id}
+                            </Badge>
+                          )}
+                        </div>
                       </TableCell>
                       <TableCell className="font-medium">{enquiry.name}</TableCell>
                       <TableCell>{enquiry.phone}</TableCell>
@@ -230,6 +276,20 @@ const AdminExpertEnquiries = () => {
           </DialogHeader>
           {selectedEnquiry && (
             <div className="space-y-4">
+              {(selectedEnquiry.customer_id || selectedEnquiry.listing_id) && (
+                <div className="p-3 bg-muted/60 rounded-lg border flex items-center gap-2 flex-wrap">
+                  {selectedEnquiry.customer_id && (
+                    <Badge variant="outline" className="font-mono text-xs font-bold bg-purple-50 text-purple-700 dark:bg-purple-950/60 dark:text-purple-300 border-purple-200">
+                      Customer ID: {selectedEnquiry.customer_id}
+                    </Badge>
+                  )}
+                  {selectedEnquiry.listing_id && (
+                    <Badge variant="outline" className="font-mono text-xs font-bold bg-blue-50 text-blue-700 dark:bg-blue-950/60 dark:text-blue-300 border-blue-200">
+                      Listing ID: {selectedEnquiry.listing_id}
+                    </Badge>
+                  )}
+                </div>
+              )}
               <div>
                 <p className="text-sm font-medium text-muted-foreground">User Name</p>
                 <p className="text-foreground">{selectedEnquiry.name}</p>
