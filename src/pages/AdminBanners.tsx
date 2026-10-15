@@ -2,13 +2,13 @@ import { useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { supabase } from "@/integrations/supabase/client";
 import { Button } from "@/components/ui/button";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { useToast } from "@/hooks/use-toast";
 import { Switch } from "@/components/ui/switch";
-import { Plus, Trash2, Pencil, ArrowUp, ArrowDown, Loader2 } from "lucide-react";
+import { Plus, Trash2, Pencil, Loader2 } from "lucide-react";
 import { useAuth } from "@/hooks/useAuth";
 import AdminLayout from "@/components/admin/AdminLayout";
 import ImageUpload from "@/components/admin/ImageUpload";
@@ -27,6 +27,7 @@ interface Banner {
   link_url: string;
   is_active: boolean;
   display_order: number;
+  created_at?: string;
 }
 
 const AdminBanners = () => {
@@ -85,18 +86,56 @@ const AdminBanners = () => {
 
   const fetchBanners = async () => {
     try {
+      // Fetch all banners
+      let allBanners: any[] = [];
       const { data, error } = await supabase
         .from("banners")
         .select("*")
-        .order("display_order", { ascending: true });
+        .order("created_at", { ascending: false });
 
-      if (error) throw error;
-      setBanners(data || []);
+      if (error) {
+        // Fallback without created_at ordering if not available
+        const fallback = await supabase.from("banners").select("*");
+        if (fallback.error) throw fallback.error;
+        allBanners = fallback.data || [];
+      } else {
+        allBanners = data || [];
+      }
+
+      await handleKeepOnlyNewestBanner(allBanners);
     } catch (error) {
       toast({ title: "Error", description: "Failed to fetch banners", variant: "destructive" });
     } finally {
       setLoading(false);
     }
+  };
+
+  const handleKeepOnlyNewestBanner = async (items: any[]) => {
+    if (items.length === 0) {
+      setBanners([]);
+      return;
+    }
+
+    // Sort newest first based on created_at or fallback
+    const sorted = [...items].sort((a, b) => {
+      const timeA = a.created_at ? new Date(a.created_at).getTime() : 0;
+      const timeB = b.created_at ? new Date(b.created_at).getTime() : 0;
+      return timeB - timeA;
+    });
+
+    const newest = sorted[0];
+
+    // If more than one banner exists, delete all older ones from Supabase
+    if (sorted.length > 1) {
+      const olderIds = sorted.slice(1).map((b) => b.id);
+      try {
+        await supabase.from("banners").delete().in("id", olderIds);
+      } catch (err) {
+        console.error("Error deleting older banners:", err);
+      }
+    }
+
+    setBanners([newest]);
   };
 
   const handleCreateOrUpdate = async () => {
@@ -107,7 +146,7 @@ const AdminBanners = () => {
     setIsCreating(true);
     try {
       if (currentBanner.id) {
-        // Update
+        // Update / Replace existing banner
         const { error } = await supabase
           .from("banners")
           .update({
@@ -120,15 +159,18 @@ const AdminBanners = () => {
         toast({ title: "Success", description: "Banner updated successfully" });
         setIsEditDialogOpen(false);
       } else {
-        // Create
-        const maxOrder = banners.length > 0 ? Math.max(...banners.map(b => b.display_order)) : 0;
+        // Create - ensure any prior banners are removed so only one exists
+        if (banners.length > 0) {
+          const oldIds = banners.map(b => b.id);
+          await supabase.from("banners").delete().in("id", oldIds);
+        }
         const { error } = await supabase
           .from("banners")
           .insert({
             image_url: currentBanner.imageUrl,
             link_url: currentBanner.linkUrl,
             is_active: currentBanner.isActive,
-            display_order: maxOrder + 1
+            display_order: 1
           });
         if (error) throw error;
         toast({ title: "Success", description: "Banner created successfully" });
@@ -154,28 +196,6 @@ const AdminBanners = () => {
       toast({ title: "Error", description: error.message || "Failed to delete", variant: "destructive" });
     } finally {
       setIsDeleting(null);
-    }
-  };
-
-  const handleReorder = async (id: string, direction: 'up' | 'down') => {
-    const currentIndex = banners.findIndex(b => b.id === id);
-    if (currentIndex < 0) return;
-    
-    if (direction === 'up' && currentIndex === 0) return;
-    if (direction === 'down' && currentIndex === banners.length - 1) return;
-
-    const swapIndex = direction === 'up' ? currentIndex - 1 : currentIndex + 1;
-    const current = banners[currentIndex];
-    const target = banners[swapIndex];
-
-    try {
-      const { error: err1 } = await supabase.from('banners').update({ display_order: target.display_order }).eq('id', current.id);
-      const { error: err2 } = await supabase.from('banners').update({ display_order: current.display_order }).eq('id', target.id);
-      
-      if (err1 || err2) throw new Error("Failed to reorder");
-      fetchBanners();
-    } catch (error: any) {
-      toast({ title: "Error", description: error.message, variant: "destructive" });
     }
   };
 
@@ -216,7 +236,7 @@ const AdminBanners = () => {
         <ImageUpload 
           bucket="banners"
           onUploadComplete={(url) => setCurrentBanner({...currentBanner, imageUrl: url})}
-          label={currentBanner.imageUrl ? "Change Image" : "Upload Banner Image"}
+          label={currentBanner.imageUrl ? "Replace Banner Image" : "Upload Banner Image"}
           targetWidth={1920}
           targetHeight={300}
           recommendedSize="Recommended: 1920 × 300 px"
@@ -248,96 +268,89 @@ const AdminBanners = () => {
           <div>
             <h1 className="text-3xl font-bold text-foreground">Banners Management</h1>
             <p className="text-muted-foreground mt-1">
-              Add and arrange auto-sliding banners for the homepage
+              Manage the homepage banner (single banner only)
             </p>
           </div>
           
-          <Dialog open={isCreateDialogOpen} onOpenChange={setIsCreateDialogOpen}>
-            <DialogTrigger asChild>
-              <Button onClick={openCreateDialog}>
-                <Plus className="h-4 w-4 mr-2" />
-                Add New Banner
-              </Button>
-            </DialogTrigger>
-            <DialogContent className="sm:max-w-[500px]">
-              <DialogHeader>
-                <DialogTitle>Add New Banner</DialogTitle>
-              </DialogHeader>
-              <DialogForm isEdit={false} />
-              <DialogFooter>
-                <Button variant="outline" onClick={() => setIsCreateDialogOpen(false)}>Cancel</Button>
-                <Button onClick={handleCreateOrUpdate} disabled={isCreating}>
-                  {isCreating && <Loader2 className="animate-spin h-4 w-4 mr-2" />}
-                  Create Banner
+          {/* Hide Add button when one banner already exists */}
+          {banners.length === 0 && (
+            <Dialog open={isCreateDialogOpen} onOpenChange={setIsCreateDialogOpen}>
+              <DialogTrigger asChild>
+                <Button onClick={openCreateDialog}>
+                  <Plus className="h-4 w-4 mr-2" />
+                  Add Banner
                 </Button>
-              </DialogFooter>
-            </DialogContent>
-          </Dialog>
+              </DialogTrigger>
+              <DialogContent className="sm:max-w-[500px]">
+                <DialogHeader>
+                  <DialogTitle>Add Homepage Banner</DialogTitle>
+                </DialogHeader>
+                <DialogForm isEdit={false} />
+                <DialogFooter>
+                  <Button variant="outline" onClick={() => setIsCreateDialogOpen(false)}>Cancel</Button>
+                  <Button onClick={handleCreateOrUpdate} disabled={isCreating}>
+                    {isCreating && <Loader2 className="animate-spin h-4 w-4 mr-2" />}
+                    Create Banner
+                  </Button>
+                </DialogFooter>
+              </DialogContent>
+            </Dialog>
+          )}
         </div>
 
         <div className="space-y-4">
           {banners.length === 0 ? (
             <Card>
               <CardContent className="py-12 text-center text-muted-foreground">
-                No banners found. Add one to display on the homepage.
+                No banner found. Click &quot;Add Banner&quot; above to create one for the homepage.
               </CardContent>
             </Card>
           ) : (
-            banners.map((banner, index) => (
+            banners.map((banner) => (
               <Card key={banner.id} className="overflow-hidden">
                 <div className="flex flex-col sm:flex-row items-center">
-                  <div className="w-full sm:w-48 h-32 bg-muted relative shrink-0">
+                  <div className="w-full sm:w-64 h-36 bg-muted relative shrink-0">
                     <img src={banner.image_url} alt="Banner" className="w-full h-full object-cover" />
                   </div>
                   <div className="p-4 flex-1 w-full">
-                    <div className="flex items-start justify-between">
-                      <div className="space-y-1">
+                    <div className="flex items-start justify-between gap-4">
+                      <div className="space-y-2">
                         <div className="flex items-center gap-2">
                           <Badge variant={banner.is_active ? "default" : "secondary"}>
                             {banner.is_active ? "Active" : "Inactive"}
                           </Badge>
-                          <span className="text-sm text-muted-foreground">Order: {banner.display_order}</span>
+                          <span className="text-xs text-muted-foreground">Homepage Banner</span>
                         </div>
-                        {banner.link_url && (
-                          <a href={banner.link_url} target="_blank" rel="noopener noreferrer" className="text-sm text-primary hover:underline line-clamp-1">
+                        {banner.link_url ? (
+                          <a 
+                            href={banner.link_url} 
+                            target="_blank" 
+                            rel="noopener noreferrer" 
+                            className="text-sm text-primary hover:underline line-clamp-1"
+                          >
                             {banner.link_url}
                           </a>
+                        ) : (
+                          <p className="text-xs text-muted-foreground">No link URL configured</p>
                         )}
                       </div>
                       
-                      <div className="flex items-center gap-2">
-                        <div className="flex flex-col mr-2">
-                          <Button 
-                            variant="ghost" 
-                            size="icon" 
-                            className="h-6 w-6" 
-                            disabled={index === 0}
-                            onClick={() => handleReorder(banner.id, 'up')}
-                          >
-                            <ArrowUp className="h-4 w-4" />
-                          </Button>
-                          <Button 
-                            variant="ghost" 
-                            size="icon" 
-                            className="h-6 w-6" 
-                            disabled={index === banners.length - 1}
-                            onClick={() => handleReorder(banner.id, 'down')}
-                          >
-                            <ArrowDown className="h-4 w-4" />
-                          </Button>
-                        </div>
+                      <div className="flex items-center gap-2 shrink-0">
                         <Button
                           size="sm"
                           variant="outline"
                           onClick={() => openEditDialog(banner)}
+                          className="flex items-center gap-1.5"
                         >
                           <Pencil className="h-4 w-4" />
+                          <span>Edit / Replace</span>
                         </Button>
                         <Button
                           size="sm"
                           variant="destructive"
                           onClick={() => handleDelete(banner.id)}
                           disabled={isDeleting === banner.id}
+                          title="Delete Banner"
                         >
                           {isDeleting === banner.id ? <Loader2 className="h-4 w-4 animate-spin" /> : <Trash2 className="h-4 w-4" />}
                         </Button>
@@ -351,10 +364,11 @@ const AdminBanners = () => {
         </div>
       </div>
 
+      {/* Edit or Replace Banner Dialog */}
       <Dialog open={isEditDialogOpen} onOpenChange={setIsEditDialogOpen}>
         <DialogContent className="sm:max-w-[500px]">
           <DialogHeader>
-            <DialogTitle>Edit Banner</DialogTitle>
+            <DialogTitle>Edit or Replace Banner</DialogTitle>
           </DialogHeader>
           <DialogForm isEdit={true} />
           <DialogFooter>

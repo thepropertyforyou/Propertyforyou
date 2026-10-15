@@ -1,5 +1,6 @@
 import { Link } from "react-router-dom";
 import { Phone, Mail } from "lucide-react";
+import logo from "@/assets/logo.png";
 
 const Footer = () => {
   const quickLinks = [
@@ -22,7 +23,13 @@ const Footer = () => {
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-8">
           {/* Company Info */}
           <div className="space-y-4">
-            <h3 className="text-xl font-bold text-primary">The Property For You</h3>
+            <Link to="/" className="inline-block">
+              <img 
+                src={logo} 
+                alt="The Property For You" 
+                className="h-12 w-auto"
+              />
+            </Link>
             <p className="text-sm text-muted-foreground leading-relaxed">
               Karnataka's trusted marketplace for land and homes.
               List free. Verify with OTP.
