@@ -1090,6 +1090,8 @@ const PostAd = () => {
                     <span className="text-xs text-muted-foreground mt-1">
                       {uploadedImageUrls.length >= maxImages
                         ? `Maximum ${maxImages} images reached. Remove an image to replace it.`
+                        : postingType === "popup"
+                        ? "Recommended: 720 × 1280 px (Portrait) • Images are automatically cropped and securely saved"
                         : "Images are automatically cropped and securely saved"}
                     </span>
                   </label>
@@ -1097,11 +1099,11 @@ const PostAd = () => {
                 {imagePreviews.length > 0 && (
                   <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-4 pt-2">
                     {imagePreviews.map((preview, index) => (
-                      <div key={index} className="relative group border rounded-lg overflow-hidden shadow-sm bg-muted">
+                      <div key={index} className={`relative group border rounded-lg overflow-hidden shadow-sm bg-muted ${postingType === "popup" ? "aspect-[9/16]" : ""}`}>
                         <img 
                           src={preview} 
                           alt={`Preview ${index + 1}`} 
-                          className="w-full h-28 object-cover" 
+                          className={`w-full ${postingType === "popup" ? "h-full" : "h-28"} object-cover`} 
                         />
                         <div className="absolute bottom-1 left-1 bg-black/60 text-white text-[10px] px-1.5 py-0.5 rounded font-medium">
                           Image {index + 1}
@@ -1200,7 +1202,9 @@ const PostAd = () => {
               onOpenChange={setCropperOpen}
               imageSrc={rawImageSrc}
               onCropComplete={handleCropComplete}
-              aspectRatio={4/3}
+              aspectRatio={postingType === "popup" ? 720 / 1280 : 4/3}
+              targetWidth={postingType === "popup" ? 720 : undefined}
+              targetHeight={postingType === "popup" ? 1280 : undefined}
             />
 
             {/* Submit Button for Form Step */}

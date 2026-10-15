@@ -160,7 +160,14 @@ const FeaturedPopupAds = () => {
         if (e.target === e.currentTarget) handleClose();
       }}
     >
-      <div className="relative bg-background rounded-2xl shadow-2xl max-w-2xl w-full mx-4 overflow-hidden animate-scale-in">
+      <div 
+        className="relative bg-background rounded-2xl shadow-2xl overflow-hidden animate-scale-in flex flex-col mx-4"
+        style={{
+          width: 'min(90vw, calc(85vh * 9 / 16), 460px)',
+          aspectRatio: '9 / 16',
+          maxHeight: '85vh',
+        }}
+      >
         {/* Close Button */}
         <button
           onClick={handleClose}
@@ -171,13 +178,13 @@ const FeaturedPopupAds = () => {
         </button>
 
         {/* Featured Badge */}
-        <Badge variant="featured" className="absolute top-3 left-3 z-20 text-xs px-2 py-1">
+        <Badge variant="featured" className="absolute top-3 left-3 z-20 text-xs px-2 py-1 shadow-md">
           Featured
         </Badge>
 
         {/* Image Only - Full Click Area */}
         <div 
-          className="relative aspect-video bg-muted cursor-pointer"
+          className="relative w-full h-full bg-muted cursor-pointer flex-1"
           onClick={() => handleAdClick(currentAd)}
         >
           {currentAd.imageUrl ? (
@@ -195,7 +202,7 @@ const FeaturedPopupAds = () => {
 
         {/* Indicator Dots - Only if multiple ads */}
         {ads.length > 1 && (
-          <div className="absolute bottom-4 left-1/2 -translate-x-1/2 flex gap-2">
+          <div className="absolute bottom-4 left-1/2 -translate-x-1/2 flex gap-2 z-20">
             {ads.map((_, index) => (
               <button
                 key={index}
@@ -205,8 +212,8 @@ const FeaturedPopupAds = () => {
                 }}
                 className={`h-2 rounded-full transition-all ${
                   index === currentIndex
-                    ? "w-6 bg-white"
-                    : "w-2 bg-white/50"
+                    ? "w-6 bg-white shadow-md"
+                    : "w-2 bg-white/60 shadow-sm"
                 }`}
                 aria-label={`Go to ad ${index + 1}`}
               />

@@ -531,7 +531,7 @@ const AdminPopupAds = () => {
                     <div className="space-y-2">
                       <Label>Ad Image *</Label>
                       {newAd.imageUrl && (
-                        <div className="relative aspect-video w-full rounded-md overflow-hidden border mb-2 bg-muted">
+                        <div className="relative aspect-[9/16] max-h-56 w-auto mx-auto rounded-md overflow-hidden border mb-2 bg-muted">
                           <img src={newAd.imageUrl} alt="Ad Preview" className="w-full h-full object-cover" />
                         </div>
                       )}
@@ -539,9 +539,9 @@ const AdminPopupAds = () => {
                         bucket="popup-ads"
                         onUploadComplete={(url) => setNewAd(prev => ({ ...prev, imageUrl: url }))}
                         label={newAd.imageUrl ? "Replace Ad Image" : "Upload Ad Image"}
-                        targetWidth={1280}
-                        targetHeight={720}
-                        recommendedSize="Recommended: 1280 × 720 px (16:9)"
+                        targetWidth={720}
+                        targetHeight={1280}
+                        recommendedSize="Recommended: 720 × 1280 px (Portrait)"
                       />
                     </div>
                     <div className="space-y-2">
@@ -655,11 +655,11 @@ const AdminPopupAds = () => {
                             <div className="space-y-2 mt-2">
                               <div className="flex items-center gap-3">
                                 {schedule.image_url ? (
-                                  <div className="w-24 h-14 rounded-md overflow-hidden bg-muted border shrink-0">
+                                  <div className="w-14 h-24 rounded-md overflow-hidden bg-muted border shrink-0">
                                     <img src={schedule.image_url} alt="Custom ad" className="w-full h-full object-cover" />
                                   </div>
                                 ) : (
-                                  <div className="w-24 h-14 rounded-md bg-muted border shrink-0 flex items-center justify-center text-xs text-muted-foreground">
+                                  <div className="w-14 h-24 rounded-md bg-muted border shrink-0 flex items-center justify-center text-xs text-muted-foreground text-center p-1">
                                     No image
                                   </div>
                                 )}
@@ -850,7 +850,7 @@ const AdminPopupAds = () => {
                 <div className="space-y-2">
                   <Label>Ad Image *</Label>
                   {editAd.imageUrl && (
-                    <div className="relative aspect-video w-full rounded-md overflow-hidden border mb-2 bg-muted">
+                    <div className="relative aspect-[9/16] max-h-56 w-auto mx-auto rounded-md overflow-hidden border mb-2 bg-muted">
                       <img src={editAd.imageUrl} alt="Ad Preview" className="w-full h-full object-cover" />
                     </div>
                   )}
@@ -858,9 +858,9 @@ const AdminPopupAds = () => {
                     bucket="popup-ads"
                     onUploadComplete={(url) => setEditAd(prev => ({ ...prev, imageUrl: url }))}
                     label={editAd.imageUrl ? "Replace Ad Image" : "Upload Ad Image"}
-                    targetWidth={1280}
-                    targetHeight={720}
-                    recommendedSize="Recommended: 1280 × 720 px (16:9)"
+                    targetWidth={720}
+                    targetHeight={1280}
+                    recommendedSize="Recommended: 720 × 1280 px (Portrait)"
                   />
                 </div>
                 <div className="space-y-2">
