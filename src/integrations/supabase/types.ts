@@ -391,7 +391,7 @@ export type Database = {
           admin_approved: boolean
           created_at: string
           id: string
-          listing_id: string
+          listing_id: string | null
           payment_amount: number
           payment_proof: string | null
           payment_status: string
@@ -399,12 +399,15 @@ export type Database = {
           selected_dates: string[] | null
           slot_number: number
           updated_at: string
+          image_url: string | null
+          link_url: string | null
+          title: string | null
         }
         Insert: {
           admin_approved?: boolean
           created_at?: string
           id?: string
-          listing_id: string
+          listing_id?: string | null
           payment_amount?: number
           payment_proof?: string | null
           payment_status?: string
@@ -412,12 +415,15 @@ export type Database = {
           selected_dates?: string[] | null
           slot_number: number
           updated_at?: string
+          image_url?: string | null
+          link_url?: string | null
+          title?: string | null
         }
         Update: {
           admin_approved?: boolean
           created_at?: string
           id?: string
-          listing_id?: string
+          listing_id?: string | null
           payment_amount?: number
           payment_proof?: string | null
           payment_status?: string
@@ -425,6 +431,9 @@ export type Database = {
           selected_dates?: string[] | null
           slot_number?: number
           updated_at?: string
+          image_url?: string | null
+          link_url?: string | null
+          title?: string | null
         }
         Relationships: [
           {

@@ -5,19 +5,18 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { useNavigate } from "react-router-dom";
 
-interface PopupListing {
+interface PopupAdItem {
   id: string;
   title: string;
-  description: string;
-  price: number;
-  location_city: string;
-  listing_images: { image_url: string }[];
-  seller_phone: string;
+  imageUrl: string;
+  linkUrl?: string | null;
+  isCustom: boolean;
+  listingId?: string | null;
 }
 
 const FeaturedPopupAds = () => {
   const [isOpen, setIsOpen] = useState(false);
-  const [listings, setListings] = useState<PopupListing[]>([]);
+  const [ads, setAds] = useState<PopupAdItem[]>([]);
   const [currentIndex, setCurrentIndex] = useState(0);
   const navigate = useNavigate();
 
@@ -46,14 +45,14 @@ const FeaturedPopupAds = () => {
   }, [isOpen]);
 
   useEffect(() => {
-    if (isOpen && listings.length > 1) {
+    if (isOpen && ads.length > 1) {
       const interval = setInterval(() => {
-        setCurrentIndex((prev) => (prev + 1) % listings.length);
+        setCurrentIndex((prev) => (prev + 1) % ads.length);
       }, 5000); // Auto-slide every 5 seconds
 
       return () => clearInterval(interval);
     }
-  }, [isOpen, listings.length]);
+  }, [isOpen, ads.length]);
 
   const fetchScheduledPopupAds = async () => {
     try {
@@ -63,8 +62,14 @@ const FeaturedPopupAds = () => {
       const { data, error } = await supabase
         .from("popup_ad_schedules")
         .select(`
+          id,
           listing_id,
+          schedule_date,
           selected_dates,
+          slot_number,
+          image_url,
+          link_url,
+          title,
           listings (
             id,
             title,
@@ -82,19 +87,41 @@ const FeaturedPopupAds = () => {
       if (error) throw error;
 
       if (data && data.length > 0) {
-        // Filter ads where today's date is in the selected_dates array
-        const todayScheduledAds = data.filter(item => {
+        // Filter ads where today's date matches schedule_date or is in selected_dates
+        const todayScheduledAds = data.filter((item: any) => {
           const selectedDates = item.selected_dates || [];
-          return selectedDates.includes(today);
+          return selectedDates.includes(today) || item.schedule_date === today;
         });
 
-        const formattedListings = todayScheduledAds
-          .filter(item => item.listings)
-          .map(item => item.listings as any)
+        const formattedAds: PopupAdItem[] = todayScheduledAds
+          .map((item: any) => {
+            if (item.listings) {
+              const img = item.listings.listing_images?.[0]?.image_url;
+              return {
+                id: item.listings.id,
+                title: item.listings.title || "Featured Property",
+                imageUrl: img || "",
+                linkUrl: null,
+                isCustom: false,
+                listingId: item.listings.id,
+              };
+            } else if (item.image_url) {
+              return {
+                id: item.id,
+                title: item.title || "Featured Ad",
+                imageUrl: item.image_url,
+                linkUrl: item.link_url || null,
+                isCustom: true,
+                listingId: null,
+              };
+            }
+            return null;
+          })
+          .filter((ad): ad is PopupAdItem => Boolean(ad && ad.imageUrl))
           .slice(0, 3); // Limit to 3 ads
         
-        if (formattedListings.length > 0) {
-          setListings(formattedListings);
+        if (formattedAds.length > 0) {
+          setAds(formattedAds);
           setIsOpen(true);
         }
       }
@@ -107,15 +134,24 @@ const FeaturedPopupAds = () => {
     setIsOpen(false);
   };
 
-  const handleListingClick = (listingId: string) => {
+  const handleAdClick = (ad: PopupAdItem) => {
     handleClose();
-    navigate(`/listing/${listingId}`);
+    if (ad.isCustom) {
+      if (ad.linkUrl) {
+        if (ad.linkUrl.startsWith("http://") || ad.linkUrl.startsWith("https://")) {
+          window.open(ad.linkUrl, "_blank", "noopener,noreferrer");
+        } else {
+          navigate(ad.linkUrl);
+        }
+      }
+    } else if (ad.listingId) {
+      navigate(`/listing/${ad.listingId}`);
+    }
   };
 
-  if (!isOpen || listings.length === 0) return null;
+  if (!isOpen || ads.length === 0) return null;
 
-  const currentListing = listings[currentIndex];
-  const images = currentListing.listing_images || [];
+  const currentAd = ads[currentIndex];
 
   return (
     <div 
@@ -142,12 +178,12 @@ const FeaturedPopupAds = () => {
         {/* Image Only - Full Click Area */}
         <div 
           className="relative aspect-video bg-muted cursor-pointer"
-          onClick={() => handleListingClick(currentListing.id)}
+          onClick={() => handleAdClick(currentAd)}
         >
-          {images.length > 0 ? (
+          {currentAd.imageUrl ? (
             <img
-              src={images[0].image_url}
-              alt={currentListing.title}
+              src={currentAd.imageUrl}
+              alt={currentAd.title}
               className="w-full h-full object-cover"
             />
           ) : (
@@ -157,10 +193,10 @@ const FeaturedPopupAds = () => {
           )}
         </div>
 
-        {/* Indicator Dots - Only if multiple listings */}
-        {listings.length > 1 && (
+        {/* Indicator Dots - Only if multiple ads */}
+        {ads.length > 1 && (
           <div className="absolute bottom-4 left-1/2 -translate-x-1/2 flex gap-2">
-            {listings.map((_, index) => (
+            {ads.map((_, index) => (
               <button
                 key={index}
                 onClick={(e) => {
@@ -172,7 +208,7 @@ const FeaturedPopupAds = () => {
                     ? "w-6 bg-white"
                     : "w-2 bg-white/50"
                 }`}
-                aria-label={`Go to listing ${index + 1}`}
+                aria-label={`Go to ad ${index + 1}`}
               />
             ))}
           </div>
@@ -183,3 +219,4 @@ const FeaturedPopupAds = () => {
 };
 
 export default FeaturedPopupAds;
+

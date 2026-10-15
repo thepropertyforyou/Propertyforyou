@@ -93,6 +93,9 @@ const AdminPopupAdDetail = () => {
           payment_proof,
           admin_approved,
           selected_dates,
+          image_url,
+          link_url,
+          title,
           listings (
             id,
             title,
@@ -164,8 +167,9 @@ const AdminPopupAdDetail = () => {
     );
   }
 
-  const mainImage = schedule.listings.listing_images
-    .sort((a, b) => a.display_order - b.display_order)[0]?.image_url;
+  const isCustom = !schedule.listings;
+  const mainImage = schedule.listings?.listing_images
+    ?.sort((a: any, b: any) => a.display_order - b.display_order)[0]?.image_url || schedule.image_url;
 
   return (
     <AdminLayout>
@@ -176,59 +180,87 @@ const AdminPopupAdDetail = () => {
         </Button>
 
         <div className="grid md:grid-cols-2 gap-6">
-          {/* Listing Details */}
+          {/* Listing / Custom Ad Details */}
           <Card>
             <CardHeader>
-              <CardTitle>Listing Details</CardTitle>
-              <CardDescription>Popup ad listing information</CardDescription>
+              <CardTitle>{isCustom ? "Custom Ad Details" : "Listing Details"}</CardTitle>
+              <CardDescription>{isCustom ? "Custom popup advertisement details" : "Popup ad listing information"}</CardDescription>
             </CardHeader>
             <CardContent className="space-y-4">
               {mainImage && (
                 <img
                   src={mainImage}
-                  alt={schedule.listings.title}
+                  alt={isCustom ? "Custom Ad" : schedule.listings?.title}
                   className="w-full h-64 object-cover rounded-lg"
                 />
               )}
-              <div>
-                <div className="flex items-center gap-2 mb-2 flex-wrap">
-                  {schedule.listings.listing_id && (
-                    <Badge variant="outline" className="font-mono text-xs font-bold bg-blue-50 text-blue-700 dark:bg-blue-950/60 dark:text-blue-300 border-blue-200">
-                      {schedule.listings.listing_id}
+              {isCustom ? (
+                <div className="space-y-3">
+                  <div className="flex items-center gap-2">
+                    <Badge variant="secondary" className="bg-blue-100 text-blue-800 dark:bg-blue-950 dark:text-blue-300 border-blue-200 font-medium">
+                      Custom Ad
                     </Badge>
-                  )}
-                  {schedule.listings.customer_id && (
-                    <Badge variant="outline" className="font-mono text-xs font-bold bg-purple-50 text-purple-700 dark:bg-purple-950/60 dark:text-purple-300 border-purple-200">
-                      {schedule.listings.customer_id}
-                    </Badge>
+                  </div>
+                  <h3 className="text-xl font-semibold">{schedule.title || "Custom Popup Ad"}</h3>
+                  {schedule.link_url ? (
+                    <div>
+                      <h4 className="font-semibold text-sm mb-1">Target Link URL</h4>
+                      <a
+                        href={schedule.link_url}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="text-primary text-sm hover:underline break-all"
+                      >
+                        {schedule.link_url}
+                      </a>
+                    </div>
+                  ) : (
+                    <p className="text-sm text-muted-foreground italic">No link URL specified</p>
                   )}
                 </div>
-                <h3 className="text-xl font-semibold">{schedule.listings.title}</h3>
-                <p className="text-2xl font-bold text-primary mt-2">
-                  ₹{schedule.listings.price.toLocaleString()}
-                </p>
-                <p className="text-sm text-muted-foreground mt-1">
-                  {schedule.listings.location_city}
-                </p>
-              </div>
-              <div>
-                <h4 className="font-semibold mb-2">Description</h4>
-                <p className="text-sm text-muted-foreground">
-                  {schedule.listings.description}
-                </p>
-              </div>
-              <div>
-                <h4 className="font-semibold mb-2">Seller Information</h4>
-                <p className="text-sm">
-                  <strong>Name:</strong> {schedule.listings.profiles.name}
-                </p>
-                <p className="text-sm">
-                  <strong>Email:</strong> {schedule.listings.profiles.email}
-                </p>
-                <p className="text-sm">
-                  <strong>Phone:</strong> {schedule.listings.profiles.phone}
-                </p>
-              </div>
+              ) : (
+                <>
+                  <div>
+                    <div className="flex items-center gap-2 mb-2 flex-wrap">
+                      {schedule.listings?.listing_id && (
+                        <Badge variant="outline" className="font-mono text-xs font-bold bg-blue-50 text-blue-700 dark:bg-blue-950/60 dark:text-blue-300 border-blue-200">
+                          {schedule.listings.listing_id}
+                        </Badge>
+                      )}
+                      {schedule.listings?.customer_id && (
+                        <Badge variant="outline" className="font-mono text-xs font-bold bg-purple-50 text-purple-700 dark:bg-purple-950/60 dark:text-purple-300 border-purple-200">
+                          {schedule.listings.customer_id}
+                        </Badge>
+                      )}
+                    </div>
+                    <h3 className="text-xl font-semibold">{schedule.listings?.title}</h3>
+                    <p className="text-2xl font-bold text-primary mt-2">
+                      ₹{schedule.listings?.price?.toLocaleString() || 0}
+                    </p>
+                    <p className="text-sm text-muted-foreground mt-1">
+                      {schedule.listings?.location_city}
+                    </p>
+                  </div>
+                  <div>
+                    <h4 className="font-semibold mb-2">Description</h4>
+                    <p className="text-sm text-muted-foreground">
+                      {schedule.listings?.description}
+                    </p>
+                  </div>
+                  <div>
+                    <h4 className="font-semibold mb-2">Seller Information</h4>
+                    <p className="text-sm">
+                      <strong>Name:</strong> {schedule.listings?.profiles?.name}
+                    </p>
+                    <p className="text-sm">
+                      <strong>Email:</strong> {schedule.listings?.profiles?.email}
+                    </p>
+                    <p className="text-sm">
+                      <strong>Phone:</strong> {schedule.listings?.profiles?.phone}
+                    </p>
+                  </div>
+                </>
+              )}
             </CardContent>
           </Card>
 

@@ -30,7 +30,10 @@ interface PopupSchedule {
   payment_amount: number;
   payment_proof: string | null;
   admin_approved: boolean;
-  listings: {
+  image_url?: string | null;
+  link_url?: string | null;
+  title?: string | null;
+  listings?: {
     id: string;
     title: string;
     price: number;
@@ -40,7 +43,7 @@ interface PopupSchedule {
     customer_id?: string;
     attributes?: any;
     profiles: { name: string; email: string };
-  };
+  } | null;
 }
 
 const AdminPopupAds = () => {
@@ -53,12 +56,17 @@ const AdminPopupAds = () => {
   const [isCreating, setIsCreating] = useState(false);
   const [allListings, setAllListings] = useState<{ id: string; title: string }[]>([]);
   
+  const [isCreateDialogOpen, setIsCreateDialogOpen] = useState(false);
+  const [newAdType, setNewAdType] = useState<"listing" | "custom">("listing");
   const [newAd, setNewAd] = useState({
     listingId: "",
     date: "",
     slot: "1",
     amount: "499",
     proof: "",
+    imageUrl: "",
+    linkUrl: "",
+    title: "",
   });
   const [paymentDialog, setPaymentDialog] = useState<{ open: boolean; scheduleId: string | null }>({
     open: false,
@@ -68,10 +76,14 @@ const AdminPopupAds = () => {
 
   const [editAd, setEditAd] = useState({
     id: "",
+    isCustom: false,
     listingId: "",
     date: "",
     slot: "1",
-    amount: "499"
+    amount: "499",
+    imageUrl: "",
+    linkUrl: "",
+    title: "",
   });
   const [isEditDialogOpen, setIsEditDialogOpen] = useState(false);
   const [isDeleting, setIsDeleting] = useState<string | null>(null);
@@ -138,6 +150,9 @@ const AdminPopupAds = () => {
           payment_amount,
           payment_proof,
           admin_approved,
+          image_url,
+          link_url,
+          title,
           listings (
             id,
             title,
@@ -154,7 +169,7 @@ const AdminPopupAds = () => {
         .order("slot_number", { ascending: true });
 
       if (error) throw error;
-      setSchedules(data || []);
+      setSchedules((data as any) || []);
     } catch (error) {
       console.error("Error fetching schedules:", error);
       toast({
@@ -283,8 +298,16 @@ const AdminPopupAds = () => {
   };
 
   const handleCreateAd = async () => {
-    if (!newAd.listingId || !newAd.date) {
-      toast({ title: "Error", description: "Please fill all required fields", variant: "destructive" });
+    if (newAdType === "listing" && !newAd.listingId) {
+      toast({ title: "Error", description: "Please select a listing", variant: "destructive" });
+      return;
+    }
+    if (newAdType === "custom" && !newAd.imageUrl) {
+      toast({ title: "Error", description: "Please upload an ad image", variant: "destructive" });
+      return;
+    }
+    if (!newAd.date) {
+      toast({ title: "Error", description: "Please select a schedule date", variant: "destructive" });
       return;
     }
 
@@ -304,21 +327,34 @@ const AdminPopupAds = () => {
         setIsCreating(false);
         return;
       }
+
+      const insertPayload: any = {
+        schedule_date: newAd.date,
+        slot_number: parseInt(newAd.slot),
+        payment_amount: parseFloat(newAd.amount || "0"),
+        payment_proof: newAd.proof || null,
+        payment_status: 'paid',
+        admin_approved: true,
+        selected_dates: [newAd.date],
+      };
+
+      if (newAdType === "custom") {
+        insertPayload.listing_id = null;
+        insertPayload.image_url = newAd.imageUrl;
+        insertPayload.link_url = newAd.linkUrl ? newAd.linkUrl.trim() : null;
+        insertPayload.title = "Custom Popup Ad";
+      } else {
+        insertPayload.listing_id = newAd.listingId;
+      }
+
       const { error } = await supabase
         .from('popup_ad_schedules')
-        .insert({
-          listing_id: newAd.listingId,
-          schedule_date: newAd.date,
-          slot_number: parseInt(newAd.slot),
-          payment_amount: parseFloat(newAd.amount),
-          payment_proof: newAd.proof,
-          payment_status: 'paid',
-          admin_approved: true
-        });
+        .insert(insertPayload);
 
       if (error) throw error;
       toast({ title: "Success", description: "Popup ad created successfully" });
-      setNewAd({ listingId: "", date: "", slot: "1", amount: "499", proof: "" });
+      setNewAd({ listingId: "", date: "", slot: "1", amount: "499", proof: "", imageUrl: "", linkUrl: "", title: "" });
+      setIsCreateDialogOpen(false);
       fetchSchedules();
     } catch (error: any) {
       toast({ title: "Error", description: error.message || "Failed to create ad", variant: "destructive" });
@@ -344,8 +380,16 @@ const AdminPopupAds = () => {
   };
 
   const handleEditAdSubmit = async () => {
-    if (!editAd.listingId || !editAd.date) {
-      toast({ title: "Error", description: "Please fill all required fields", variant: "destructive" });
+    if (!editAd.isCustom && !editAd.listingId) {
+      toast({ title: "Error", description: "Please select a listing", variant: "destructive" });
+      return;
+    }
+    if (editAd.isCustom && !editAd.imageUrl) {
+      toast({ title: "Error", description: "Please upload an ad image", variant: "destructive" });
+      return;
+    }
+    if (!editAd.date) {
+      toast({ title: "Error", description: "Please select a schedule date", variant: "destructive" });
       return;
     }
 
@@ -364,13 +408,23 @@ const AdminPopupAds = () => {
         return;
       }
 
+      const updatePayload: any = {
+        schedule_date: editAd.date,
+        slot_number: parseInt(editAd.slot),
+        selected_dates: [editAd.date],
+      };
+
+      if (editAd.isCustom) {
+        updatePayload.listing_id = null;
+        updatePayload.image_url = editAd.imageUrl;
+        updatePayload.link_url = editAd.linkUrl ? editAd.linkUrl.trim() : null;
+      } else {
+        updatePayload.listing_id = editAd.listingId;
+      }
+
       const { error } = await supabase
         .from('popup_ad_schedules')
-        .update({
-          listing_id: editAd.listingId,
-          schedule_date: editAd.date,
-          slot_number: parseInt(editAd.slot)
-        })
+        .update(updatePayload)
         .eq('id', editAd.id);
 
       if (error) throw error;
@@ -417,30 +471,92 @@ const AdminPopupAds = () => {
             </p>
           </div>
           
-          <Dialog>
+          <Dialog open={isCreateDialogOpen} onOpenChange={setIsCreateDialogOpen}>
             <DialogTrigger asChild>
-              <Button>
+              <Button onClick={() => {
+                setNewAdType("listing");
+                setNewAd({ listingId: "", date: "", slot: "1", amount: "499", proof: "", imageUrl: "", linkUrl: "", title: "" });
+                setIsCreateDialogOpen(true);
+              }}>
                 <Plus className="h-4 w-4 mr-2" />
                 Add New Popup Ad
               </Button>
             </DialogTrigger>
             <DialogContent className="sm:max-w-[500px]">
               <DialogHeader>
-                <DialogTitle>Create Manual Popup Ad</DialogTitle>
-                <DialogDescription>Add a popup ad schedule for an existing listing</DialogDescription>
+                <DialogTitle>Create Popup Ad</DialogTitle>
+                <DialogDescription>Schedule a popup ad from an existing listing or create a custom ad</DialogDescription>
               </DialogHeader>
               <div className="space-y-4 py-4">
-                <div className="space-y-2">
-                  <Label>Select Listing *</Label>
-                  <Select value={newAd.listingId} onValueChange={(val) => setNewAd({...newAd, listingId: val})}>
-                    <SelectTrigger>
-                      <SelectValue placeholder="Search listing..." />
-                    </SelectTrigger>
-                    <SelectContent>
-                      {allListings.map(l => <SelectItem key={l.id} value={l.id}>{l.title}</SelectItem>)}
-                    </SelectContent>
-                  </Select>
+                {/* Mode Selector */}
+                <div className="flex border rounded-lg p-1 bg-muted/50">
+                  <button
+                    type="button"
+                    onClick={() => setNewAdType("listing")}
+                    className={`flex-1 py-1.5 text-xs sm:text-sm font-medium rounded-md transition-all ${
+                      newAdType === "listing" 
+                        ? "bg-background text-foreground shadow-sm" 
+                        : "text-muted-foreground hover:text-foreground"
+                    }`}
+                  >
+                    Select Listing
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setNewAdType("custom")}
+                    className={`flex-1 py-1.5 text-xs sm:text-sm font-medium rounded-md transition-all ${
+                      newAdType === "custom" 
+                        ? "bg-background text-foreground shadow-sm" 
+                        : "text-muted-foreground hover:text-foreground"
+                    }`}
+                  >
+                    Custom Ad
+                  </button>
                 </div>
+
+                {newAdType === "listing" ? (
+                  <div className="space-y-2">
+                    <Label>Select Listing *</Label>
+                    <Select value={newAd.listingId} onValueChange={(val) => setNewAd({...newAd, listingId: val})}>
+                      <SelectTrigger>
+                        <SelectValue placeholder="Search listing..." />
+                      </SelectTrigger>
+                      <SelectContent>
+                        {allListings.map(l => <SelectItem key={l.id} value={l.id}>{l.title}</SelectItem>)}
+                      </SelectContent>
+                    </Select>
+                  </div>
+                ) : (
+                  <div className="space-y-4">
+                    <div className="space-y-2">
+                      <Label>Ad Image *</Label>
+                      {newAd.imageUrl && (
+                        <div className="relative aspect-video w-full rounded-md overflow-hidden border mb-2 bg-muted">
+                          <img src={newAd.imageUrl} alt="Ad Preview" className="w-full h-full object-cover" />
+                        </div>
+                      )}
+                      <ImageUpload 
+                        bucket="popup-ads"
+                        onUploadComplete={(url) => setNewAd(prev => ({ ...prev, imageUrl: url }))}
+                        label={newAd.imageUrl ? "Replace Ad Image" : "Upload Ad Image"}
+                        targetWidth={1280}
+                        targetHeight={720}
+                        recommendedSize="Recommended: 1280 × 720 px (16:9)"
+                      />
+                    </div>
+                    <div className="space-y-2">
+                      <Label htmlFor="custom-link-url">Link URL (Optional)</Label>
+                      <Input
+                        id="custom-link-url"
+                        type="url"
+                        placeholder="https://example.com"
+                        value={newAd.linkUrl}
+                        onChange={(e) => setNewAd(prev => ({ ...prev, linkUrl: e.target.value }))}
+                      />
+                    </div>
+                  </div>
+                )}
+
                 <div className="grid grid-cols-2 gap-4">
                   <div className="space-y-2">
                     <Label>Schedule Date *</Label>
@@ -458,9 +574,9 @@ const AdminPopupAds = () => {
                     </Select>
                   </div>
                 </div>
-
               </div>
               <DialogFooter>
+                <Button variant="outline" onClick={() => setIsCreateDialogOpen(false)}>Cancel</Button>
                 <Button onClick={handleCreateAd} disabled={isCreating}>
                   {isCreating ? <Loader2 className="animate-spin mr-2" /> : "Create Ad"}
                 </Button>
@@ -488,122 +604,178 @@ const AdminPopupAds = () => {
               </CardHeader>
               <CardContent>
                 <div className="grid gap-4">
-                  {daySchedules.map((schedule) => (
-                    <div
-                      key={schedule.id}
-                      className="flex items-center justify-between p-4 border rounded-lg hover:bg-muted/50 transition-colors"
-                    >
-                      <div className="flex-1">
-                        <div className="flex items-center gap-2 mb-1 flex-wrap">
-                          {schedule.listings?.listing_id && (
-                            <Badge variant="outline" className="font-mono text-xs font-bold bg-blue-50 text-blue-700 dark:bg-blue-950/60 dark:text-blue-300 border-blue-200">
-                              {schedule.listings.listing_id}
+                  {daySchedules.map((schedule) => {
+                    const isCustom = !schedule.listings;
+                    return (
+                      <div
+                        key={schedule.id}
+                        className="flex items-center justify-between p-4 border rounded-lg hover:bg-muted/50 transition-colors"
+                      >
+                        <div className="flex-1">
+                          <div className="flex items-center gap-2 mb-1 flex-wrap">
+                            {schedule.listings?.listing_id && (
+                              <Badge variant="outline" className="font-mono text-xs font-bold bg-blue-50 text-blue-700 dark:bg-blue-950/60 dark:text-blue-300 border-blue-200">
+                                {schedule.listings.listing_id}
+                              </Badge>
+                            )}
+                            {schedule.listings?.customer_id && (
+                              <Badge variant="outline" className="font-mono text-xs font-bold bg-purple-50 text-purple-700 dark:bg-purple-950/60 dark:text-purple-300 border-purple-200">
+                                {schedule.listings.customer_id}
+                              </Badge>
+                            )}
+                            <Badge variant="outline">Slot {schedule.slot_number}</Badge>
+                            {isCustom && (
+                              <Badge variant="secondary" className="bg-blue-100 text-blue-800 dark:bg-blue-950 dark:text-blue-300 border-blue-200 font-medium">
+                                Custom Ad
+                              </Badge>
+                            )}
+                            <h3 className="font-semibold">{schedule.listings?.title || schedule.title || "Custom Popup Ad"}</h3>
+                            <Badge 
+                              variant={
+                                schedule.payment_status === "paid" 
+                                  ? "default" 
+                                  : schedule.payment_status === "rejected"
+                                  ? "destructive"
+                                  : "secondary"
+                              }
+                            >
+                              {schedule.payment_status}
                             </Badge>
+                            {schedule.admin_approved && (
+                              <Badge variant="featured">Approved</Badge>
+                            )}
+                            {schedule.listings?.attributes?.plan_name && (
+                              <Badge variant="outline" className="border-purple-500 text-purple-600 bg-purple-50/50 dark:bg-purple-950/50">
+                                {schedule.listings.attributes.plan_name} ({schedule.listings.attributes.plan_duration} Days)
+                              </Badge>
+                            )}
+                          </div>
+
+                          {isCustom ? (
+                            <div className="space-y-2 mt-2">
+                              <div className="flex items-center gap-3">
+                                {schedule.image_url ? (
+                                  <div className="w-24 h-14 rounded-md overflow-hidden bg-muted border shrink-0">
+                                    <img src={schedule.image_url} alt="Custom ad" className="w-full h-full object-cover" />
+                                  </div>
+                                ) : (
+                                  <div className="w-24 h-14 rounded-md bg-muted border shrink-0 flex items-center justify-center text-xs text-muted-foreground">
+                                    No image
+                                  </div>
+                                )}
+                                <div className="text-sm space-y-1">
+                                  {schedule.link_url ? (
+                                    <p className="text-xs text-muted-foreground flex items-center gap-1.5">
+                                      <span className="font-medium text-foreground">Link URL:</span>
+                                      <a
+                                        href={schedule.link_url}
+                                        target="_blank"
+                                        rel="noopener noreferrer"
+                                        className="text-primary hover:underline max-w-sm truncate inline-block align-bottom"
+                                      >
+                                        {schedule.link_url}
+                                      </a>
+                                    </p>
+                                  ) : (
+                                    <p className="text-xs text-muted-foreground italic">No link URL provided</p>
+                                  )}
+                                  <p className="text-xs text-muted-foreground">
+                                    Popup Ad Fee: ₹{schedule.payment_amount.toLocaleString()}
+                                  </p>
+                                </div>
+                              </div>
+                            </div>
+                          ) : (
+                            <>
+                              <p className="text-sm text-muted-foreground">
+                                ₹{schedule.listings?.price?.toLocaleString() || 0} • 
+                                By {schedule.listings?.profiles?.name || "Customer"} ({schedule.listings?.profiles?.email || "No email"})
+                              </p>
+                              <p className="text-xs text-muted-foreground mt-1">
+                                Popup Ad Fee: ₹{schedule.payment_amount.toLocaleString()}
+                              </p>
+                            </>
                           )}
-                          {schedule.listings?.customer_id && (
-                            <Badge variant="outline" className="font-mono text-xs font-bold bg-purple-50 text-purple-700 dark:bg-purple-950/60 dark:text-purple-300 border-purple-200">
-                              {schedule.listings.customer_id}
-                            </Badge>
-                          )}
-                          <Badge variant="outline">Slot {schedule.slot_number}</Badge>
-                          <h3 className="font-semibold">{schedule.listings.title}</h3>
-                          <Badge 
-                            variant={
-                              schedule.payment_status === "paid" 
-                                ? "default" 
-                                : schedule.payment_status === "rejected"
-                                ? "destructive"
-                                : "secondary"
-                            }
-                          >
-                            {schedule.payment_status}
-                          </Badge>
-                          {schedule.admin_approved && (
-                            <Badge variant="featured">Approved</Badge>
-                          )}
-                          {schedule.listings?.attributes?.plan_name && (
-                            <Badge variant="outline" className="border-purple-500 text-purple-600 bg-purple-50/50 dark:bg-purple-950/50">
-                              {schedule.listings.attributes.plan_name} ({schedule.listings.attributes.plan_duration} Days)
-                            </Badge>
+
+                          {schedule.payment_proof ? (
+                            <div className="mt-1">
+                              <a
+                                href={schedule.payment_proof}
+                                target="_blank"
+                                rel="noopener noreferrer"
+                                className="text-xs text-primary hover:underline"
+                              >
+                                View Payment Proof
+                              </a>
+                            </div>
+                          ) : (
+                            !isCustom && (
+                              <div className="mt-2 w-36">
+                                <ImageUpload 
+                                  bucket="popup-ads"
+                                  onUploadComplete={(url) => handleProofUpload(schedule.id, url)}
+                                  label="Upload Proof"
+                                  targetWidth={800}
+                                  targetHeight={1000}
+                                  recommendedSize="Recommended: 800 × 1000 px"
+                                />
+                              </div>
+                            )
                           )}
                         </div>
-                        <p className="text-sm text-muted-foreground">
-                          ₹{schedule.listings.price.toLocaleString()} • 
-                          By {schedule.listings.profiles.name} ({schedule.listings.profiles.email})
-                        </p>
-                        <p className="text-xs text-muted-foreground mt-1">
-                          Popup Ad Fee: ₹{schedule.payment_amount.toLocaleString()}
-                        </p>
-                        {schedule.payment_proof ? (
-                          <a
-                            href={schedule.payment_proof}
-                            target="_blank"
-                            rel="noopener noreferrer"
-                            className="text-xs text-primary hover:underline"
-                          >
-                            View Payment Proof
-                          </a>
-                        ) : (
-                          <div className="mt-2 w-36">
-                            <ImageUpload 
-                              bucket="popup-ads"
-                              onUploadComplete={(url) => handleProofUpload(schedule.id, url)}
-                              label="Upload Proof"
-                              targetWidth={800}
-                              targetHeight={1000}
-                              recommendedSize="Recommended: 800 × 1000 px"
-                            />
-                          </div>
-                        )}
-                      </div>
-                      <div className="flex gap-2">
-                        <Button
-                          size="sm"
-                          variant="outline"
-                          onClick={() => navigate(`/admin/popup-ads/${schedule.id}`)}
-                        >
-                          <Eye className="h-4 w-4" />
-                        </Button>
-                        <Button
-                          size="sm"
-                          variant="outline"
-                          onClick={() => {
-                            setEditAd({
-                              id: schedule.id,
-                              listingId: schedule.listings.id,
-                              date: schedule.schedule_date,
-                              slot: schedule.slot_number.toString(),
-                              amount: schedule.payment_amount.toString()
-                            });
-                            setIsEditDialogOpen(true);
-                          }}
-                        >
-                          <Pencil className="h-4 w-4" />
-                        </Button>
-                        <Button
-                          size="sm"
-                          variant="destructive"
-                          onClick={() => handleDeleteAd(schedule.id)}
-                          disabled={isDeleting === schedule.id}
-                        >
-                          {isDeleting === schedule.id ? <Loader2 className="h-4 w-4 animate-spin" /> : <Trash2 className="h-4 w-4" />}
-                        </Button>
-                        {schedule.payment_status === "pending" && (
+                        <div className="flex gap-2">
                           <Button
                             size="sm"
-                            variant="default"
+                            variant="outline"
+                            onClick={() => navigate(`/admin/popup-ads/${schedule.id}`)}
+                          >
+                            <Eye className="h-4 w-4" />
+                          </Button>
+                          <Button
+                            size="sm"
+                            variant="outline"
                             onClick={() => {
-                              setPaymentDialog({ open: true, scheduleId: schedule.id });
-                              setPaymentAmount(schedule.payment_amount.toString());
+                              setEditAd({
+                                id: schedule.id,
+                                isCustom,
+                                listingId: schedule.listings?.id || "",
+                                date: schedule.schedule_date,
+                                slot: schedule.slot_number.toString(),
+                                amount: schedule.payment_amount.toString(),
+                                imageUrl: schedule.image_url || "",
+                                linkUrl: schedule.link_url || "",
+                                title: schedule.title || "",
+                              });
+                              setIsEditDialogOpen(true);
                             }}
                           >
-                            <DollarSign className="h-4 w-4 mr-1" />
-                            Manage Payment
+                            <Pencil className="h-4 w-4" />
                           </Button>
-                        )}
+                          <Button
+                            size="sm"
+                            variant="destructive"
+                            onClick={() => handleDeleteAd(schedule.id)}
+                            disabled={isDeleting === schedule.id}
+                          >
+                            {isDeleting === schedule.id ? <Loader2 className="h-4 w-4 animate-spin" /> : <Trash2 className="h-4 w-4" />}
+                          </Button>
+                          {schedule.payment_status === "pending" && (
+                            <Button
+                              size="sm"
+                              variant="default"
+                              onClick={() => {
+                                setPaymentDialog({ open: true, scheduleId: schedule.id });
+                                setPaymentAmount(schedule.payment_amount.toString());
+                              }}
+                            >
+                              <DollarSign className="h-4 w-4 mr-1" />
+                              Manage Payment
+                            </Button>
+                          )}
+                        </div>
                       </div>
-                    </div>
-                  ))}
+                    );
+                  })}
                 </div>
               </CardContent>
             </Card>
@@ -673,17 +845,48 @@ const AdminPopupAds = () => {
             <DialogDescription>Modify the details for this scheduled ad.</DialogDescription>
           </DialogHeader>
           <div className="space-y-4 py-4">
-            <div className="space-y-2">
-              <Label>Select Listing *</Label>
-              <Select value={editAd.listingId} onValueChange={(val) => setEditAd({...editAd, listingId: val})}>
-                <SelectTrigger>
-                  <SelectValue placeholder="Search listing..." />
-                </SelectTrigger>
-                <SelectContent>
-                  {allListings.map(l => <SelectItem key={l.id} value={l.id}>{l.title}</SelectItem>)}
-                </SelectContent>
-              </Select>
-            </div>
+            {editAd.isCustom ? (
+              <div className="space-y-4">
+                <div className="space-y-2">
+                  <Label>Ad Image *</Label>
+                  {editAd.imageUrl && (
+                    <div className="relative aspect-video w-full rounded-md overflow-hidden border mb-2 bg-muted">
+                      <img src={editAd.imageUrl} alt="Ad Preview" className="w-full h-full object-cover" />
+                    </div>
+                  )}
+                  <ImageUpload 
+                    bucket="popup-ads"
+                    onUploadComplete={(url) => setEditAd(prev => ({ ...prev, imageUrl: url }))}
+                    label={editAd.imageUrl ? "Replace Ad Image" : "Upload Ad Image"}
+                    targetWidth={1280}
+                    targetHeight={720}
+                    recommendedSize="Recommended: 1280 × 720 px (16:9)"
+                  />
+                </div>
+                <div className="space-y-2">
+                  <Label htmlFor="edit-link-url">Link URL (Optional)</Label>
+                  <Input
+                    id="edit-link-url"
+                    type="url"
+                    placeholder="https://example.com"
+                    value={editAd.linkUrl}
+                    onChange={(e) => setEditAd(prev => ({ ...prev, linkUrl: e.target.value }))}
+                  />
+                </div>
+              </div>
+            ) : (
+              <div className="space-y-2">
+                <Label>Select Listing *</Label>
+                <Select value={editAd.listingId} onValueChange={(val) => setEditAd({...editAd, listingId: val})}>
+                  <SelectTrigger>
+                    <SelectValue placeholder="Search listing..." />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {allListings.map(l => <SelectItem key={l.id} value={l.id}>{l.title}</SelectItem>)}
+                  </SelectContent>
+                </Select>
+              </div>
+            )}
             <div className="grid grid-cols-2 gap-4">
               <div className="space-y-2">
                 <Label>Schedule Date *</Label>
