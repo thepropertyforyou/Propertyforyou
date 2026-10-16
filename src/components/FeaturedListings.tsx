@@ -34,6 +34,7 @@ const FeaturedListings = () => {
           price,
           location_city,
           location_locality,
+          is_featured,
           category_id,
           attributes,
           categories (name, slug),
@@ -41,9 +42,8 @@ const FeaturedListings = () => {
         `)
         .eq("is_featured", true)
         .eq("status", "active")
-        .order("created_at", { ascending: false });
-
-
+        .order("created_at", { ascending: false })
+        .limit(4);
 
       const { data, error } = await query;
 
@@ -61,13 +61,21 @@ const FeaturedListings = () => {
     <section className="py-16 bg-accent/10">
       <div className="container mx-auto px-4">
         <div className="space-y-6">
-          <div className="text-center space-y-2">
-            <h2 className="text-3xl md:text-4xl font-bold text-foreground">
-              ⭐ Featured Listings
-            </h2>
-            <p className="text-muted-foreground text-lg">
-              Premium verified listings across all categories
-            </p>
+          <div className="flex flex-col sm:flex-row sm:items-end justify-between gap-4">
+            <div className="space-y-1 text-center sm:text-left">
+              <h2 className="text-3xl md:text-4xl font-bold text-foreground">
+                ⭐ Featured Listings
+              </h2>
+              <p className="text-muted-foreground text-lg">
+                Premium verified listings across all categories
+              </p>
+            </div>
+            <Link
+              to="/properties?featured=true"
+              className="text-primary hover:text-primary/80 font-semibold inline-flex items-center justify-center gap-1 text-sm sm:text-base hover:underline self-center sm:self-end"
+            >
+              View all →
+            </Link>
           </div>
 
           {loading ? (
@@ -86,10 +94,19 @@ const FeaturedListings = () => {
               </Link>
             </div>
           ) : (
-            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6">
-              {listings.map((listing) => (
-                <ListingCard key={listing.id} listing={listing as any} />
-              ))}
+            <div className="space-y-8">
+              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6">
+                {listings.map((listing) => (
+                  <ListingCard key={listing.id} listing={listing as any} />
+                ))}
+              </div>
+              <div className="text-center pt-2">
+                <Link to="/properties?featured=true">
+                  <Button variant="outline" className="rounded-full px-6">
+                    View all →
+                  </Button>
+                </Link>
+              </div>
             </div>
           )}
         </div>

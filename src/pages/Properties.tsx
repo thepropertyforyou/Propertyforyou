@@ -119,7 +119,7 @@ const Properties = () => {
     maxPrice: "",
     propertyType: "",
     bedrooms: "",
-    featuredOnly: false,
+    featuredOnly: searchParams.get("featured") === "true" || searchParams.get("featuredOnly") === "true",
   });
 
   useEffect(() => {
@@ -128,7 +128,13 @@ const Properties = () => {
 
   useEffect(() => {
     const urlSearch = searchParams.get("search") ?? "";
-    setFilters((prev) => (prev.search === urlSearch ? prev : { ...prev, search: urlSearch }));
+    const urlFeatured = searchParams.get("featured") === "true" || searchParams.get("featuredOnly") === "true";
+    setFilters((prev) => {
+      const searchMatches = prev.search === urlSearch;
+      const featuredMatches = Boolean(prev.featuredOnly) === urlFeatured;
+      if (searchMatches && featuredMatches) return prev;
+      return { ...prev, search: urlSearch, featuredOnly: urlFeatured };
+    });
   }, [searchParams]);
 
   useEffect(() => {
@@ -298,6 +304,18 @@ const Properties = () => {
           next.set("search", value);
         } else {
           next.delete("search");
+        }
+        return next;
+      }, { replace: true });
+    }
+    if (key === "featuredOnly") {
+      setSearchParams((prev) => {
+        const next = new URLSearchParams(prev);
+        if (value) {
+          next.set("featured", "true");
+        } else {
+          next.delete("featured");
+          next.delete("featuredOnly");
         }
         return next;
       }, { replace: true });
