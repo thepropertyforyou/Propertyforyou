@@ -5,6 +5,7 @@ import { Badge } from "@/components/ui/badge";
 import { Card, CardContent } from "@/components/ui/card";
 import { supabase } from "@/integrations/supabase/client";
 import { FavoriteButton } from "@/components/FavoriteButton";
+import { formatListingPrice } from "@/lib/priceUtils";
 
 interface Listing {
   id: string;
@@ -131,21 +132,12 @@ const RegularListings = () => {
                       {listing.title}
                     </h3>
                     <p className="text-xl font-bold text-primary">
-                      {(() => {
-                        const unit = (listing as any).attributes?.priceUnit;
-                        let unitLabel = "";
-                        if (unit === "sqft") unitLabel = " / Sq Ft";
-                        else if (unit === "acre") unitLabel = " / Acre";
-                        else if (unit === "cent") unitLabel = " / Cent";
-                        else if (unit === "month") unitLabel = " / month";
-                        else if (unit === "unit") unitLabel = " / Unit";
-                        else if (unit) unitLabel = ` / ${unit}`;
-
-                        const depositVal = (listing as any).deposit ?? (listing as any).attributes?.deposit;
-                        const depositText = depositVal ? `, Deposit ₹${Number(depositVal).toLocaleString()}` : "";
-
-                        return `₹${listing.price.toLocaleString()}${unitLabel}${depositText}`;
-                      })()}
+                      {formatListingPrice(
+                        listing.price,
+                        (listing as any).attributes?.priceUnit,
+                        (listing as any).deposit ?? (listing as any).attributes?.deposit,
+                        (listing as any).attributes?.displayPrice
+                      )}
                     </p>
                     <div className="flex items-center gap-1 text-sm text-muted-foreground">
                       <MapPin className="h-4 w-4" />

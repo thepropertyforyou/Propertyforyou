@@ -13,6 +13,7 @@ import { MapPin, Filter, X, Star } from "lucide-react";
 import { statesAndDistricts } from "@/data/india-locations";
 import { ListingCard } from "@/components/ListingCard";
 import SponsoredAdsSidebar from "@/components/SponsoredAdsSidebar";
+import { parsePriceToNumber } from "@/lib/priceUtils";
 import {
   Pagination,
   PaginationContent,
@@ -237,14 +238,16 @@ const Properties = () => {
     }
 
     if (filters.minPrice) {
-      filtered = filtered.filter(
-        (listing) => listing.price >= parseFloat(filters.minPrice)
-      );
+      const min = parsePriceToNumber(filters.minPrice);
+      if (min > 0) {
+        filtered = filtered.filter((listing) => listing.price >= min);
+      }
     }
     if (filters.maxPrice) {
-      filtered = filtered.filter(
-        (listing) => listing.price <= parseFloat(filters.maxPrice)
-      );
+      const max = parsePriceToNumber(filters.maxPrice);
+      if (max > 0) {
+        filtered = filtered.filter((listing) => listing.price <= max);
+      }
     }
 
     if (filters.propertyType && filters.propertyType !== "all") {

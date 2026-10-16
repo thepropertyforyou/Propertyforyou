@@ -12,6 +12,7 @@ import { toast } from "sonner";
 import { supabase } from "@/integrations/supabase/client";
 import { ImageCropperDialog } from "@/components/common/ImageCropperDialog";
 import { statesAndDistricts } from "@/data/india-locations";
+import { parsePriceToNumber } from "@/lib/priceUtils";
 import { Loader2, Upload, X } from "lucide-react";
 
 const AdminAddListing = () => {
@@ -113,7 +114,8 @@ const AdminAddListing = () => {
       toast.error("Please select a property type");
       return;
     }
-    if (!formData.price || parseFloat(formData.price) <= 0 || isNaN(parseFloat(formData.price))) {
+    const numericPrice = parsePriceToNumber(formData.price);
+    if (!formData.price.trim() || numericPrice <= 0) {
       toast.error("Please enter a valid price");
       return;
     }
@@ -155,9 +157,12 @@ const AdminAddListing = () => {
 
       const depositVal = subCategory === "rent" && formData.deposit ? parseFloat(formData.deposit) : undefined;
 
+      const numericPrice = parsePriceToNumber(formData.price);
+
       const attributesPayload: any = {
         subCategory,
         priceUnit,
+        displayPrice: formData.price.trim(),
         propertyType: formData.propertyType,
         size: formData.size || undefined,
         state: formData.state,
@@ -173,7 +178,7 @@ const AdminAddListing = () => {
         user_id: user.id,
         category_id: categoryId,
         title: formData.title.trim(),
-        price: parseFloat(formData.price),
+        price: numericPrice,
         description: formData.description.trim(),
         location_city: formData.district,
         location_locality: formData.taluk || null,
@@ -363,10 +368,10 @@ const AdminAddListing = () => {
                   <div className="col-span-2">
                     <Input 
                       id="price" 
-                      type="number" 
+                      type="text" 
                       value={formData.price} 
                       onChange={(e) => setFormData({ ...formData, price: e.target.value })} 
-                      placeholder={subCategory === "rent" ? "Enter monthly rent" : "Enter price"} 
+                      placeholder={subCategory === "rent" ? "e.g. 15,000 or 15k" : "e.g. 1.20 cr, 1 lakh, 15000"} 
                       required
                     />
                   </div>
@@ -376,10 +381,12 @@ const AdminAddListing = () => {
                         <SelectValue placeholder="Unit" />
                       </SelectTrigger>
                       <SelectContent>
+                        <SelectItem value="plain">Plain</SelectItem>
                         <SelectItem value="sqft">Per Sq Ft</SelectItem>
                         <SelectItem value="acre">Per Acre</SelectItem>
                         <SelectItem value="cent">Per Cent</SelectItem>
                         <SelectItem value="month">Per Month</SelectItem>
+                        <SelectItem value="room">Per Room</SelectItem>
                         <SelectItem value="unit">Per Unit</SelectItem>
                       </SelectContent>
                     </Select>

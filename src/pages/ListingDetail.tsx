@@ -8,6 +8,7 @@ import { Card, CardContent } from "@/components/ui/card";
 import { MapPin, Phone, Mail, Calendar, ArrowLeft, Star, MessageCircle, ChevronLeft, ChevronRight } from "lucide-react";
 import { toast } from "sonner";
 import { supabase } from "@/integrations/supabase/client";
+import { formatListingPrice } from "@/lib/priceUtils";
 
 import { useAuth } from "@/hooks/useAuth";
 
@@ -58,18 +59,7 @@ const ListingDetail = () => {
         return;
       }
 
-      // Format data for display
-      const priceUnit = data.attributes?.priceUnit;
-      let priceUnitLabel = '';
-      if (priceUnit === 'sqft') priceUnitLabel = ' / Sq Ft';
-      else if (priceUnit === 'acre') priceUnitLabel = ' / Acre';
-      else if (priceUnit === 'cent') priceUnitLabel = ' / Cent';
-      else if (priceUnit === 'month') priceUnitLabel = ' / month';
-      else if (priceUnit === 'unit') priceUnitLabel = ' / Unit';
-      else if (priceUnit) priceUnitLabel = ` / ${priceUnit}`;
-
       const depositAmount = (data as any).deposit ?? data.attributes?.deposit;
-      const depositText = depositAmount ? `, Deposit ₹${Number(depositAmount).toLocaleString()}` : '';
 
       const formattedListing = {
         ...data,
@@ -78,7 +68,12 @@ const ListingDetail = () => {
           .map((img: any) => img.image_url) || [],
         category: data.categories?.name,
         location: `${data.location_city}${data.location_locality ? ', ' + data.location_locality : ''}`,
-        price: `₹${Number(data.price).toLocaleString()}${priceUnitLabel}${depositText}`,
+        price: formatListingPrice(
+          data.price,
+          data.attributes?.priceUnit,
+          depositAmount,
+          data.attributes?.displayPrice
+        ),
         deposit: depositAmount,
         sellerName: data.seller_name,
         phone: data.seller_phone,

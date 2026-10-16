@@ -12,6 +12,7 @@ import { toast } from "sonner";
 import { supabase } from "@/integrations/supabase/client";
 import ImageUpload from "@/components/admin/ImageUpload";
 import { Loader2, Plus, ArrowLeft } from "lucide-react";
+import { parsePriceToNumber } from "@/lib/priceUtils";
 
 const AdminEditListing = () => {
   const { id } = useParams();
@@ -75,7 +76,7 @@ const AdminEditListing = () => {
         const depositVal = (listing as any).deposit ?? (listing.attributes as any)?.deposit;
         setFormData({
           title: listing.title,
-          price: listing.price.toString(),
+          price: (listing.attributes as any)?.displayPrice || listing.price.toString(),
           deposit: depositVal !== undefined && depositVal !== null ? depositVal.toString() : "",
           description: listing.description || "",
           categoryId: listing.category_id,
@@ -113,6 +114,11 @@ const AdminEditListing = () => {
       toast.error("Please select a subcategory");
       return;
     }
+    const numericPrice = parsePriceToNumber(formData.price);
+    if (!formData.price.trim() || numericPrice <= 0) {
+      toast.error("Please enter a valid price");
+      return;
+    }
     if (selectedCategorySlug === "properties" && subCategory === "rent" && !formData.deposit) {
       toast.error("Please enter the deposit amount for rent");
       return;
@@ -139,13 +145,14 @@ const AdminEditListing = () => {
         ...currentAttributes,
         subCategory: selectedCategorySlug ? subCategory : undefined,
         priceUnit: selectedCategorySlug === 'properties' ? priceUnit : undefined,
+        displayPrice: formData.price.trim(),
         deposit: depositNum,
       };
 
       const updatePayload: any = {
         category_id: formData.categoryId,
         title: formData.title,
-        price: parseFloat(formData.price),
+        price: numericPrice,
         description: formData.description,
         location_city: formData.city,
         location_locality: formData.locality || null,
@@ -313,8 +320,8 @@ const AdminEditListing = () => {
                       <div className="col-span-2">
                         <Input 
                           id="price" 
-                          type="number" 
-                          placeholder={subCategory === "rent" ? "Enter monthly rent" : "5000000"} 
+                          type="text" 
+                          placeholder={subCategory === "rent" ? "e.g. 15,000 or 15k" : "e.g. 1.20 cr, 1 lakh, 15000"} 
                           value={formData.price}
                           onChange={(e) => setFormData({...formData, price: e.target.value})}
                           required 
@@ -326,10 +333,12 @@ const AdminEditListing = () => {
                             <SelectValue placeholder="Unit" />
                           </SelectTrigger>
                           <SelectContent>
+                            <SelectItem value="plain">Plain</SelectItem>
                             <SelectItem value="sqft">Per Sq Ft</SelectItem>
                             <SelectItem value="acre">Per Acre</SelectItem>
                             <SelectItem value="cent">Per Cent</SelectItem>
                             <SelectItem value="month">Per Month</SelectItem>
+                            <SelectItem value="room">Per Room</SelectItem>
                             <SelectItem value="unit">Per Unit</SelectItem>
                           </SelectContent>
                         </Select>

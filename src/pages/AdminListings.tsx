@@ -9,6 +9,7 @@ import { Edit, Trash2, Eye, Plus, CheckCircle, XCircle } from "lucide-react";
 import { useAuth } from "@/hooks/useAuth";
 import AdminLayout from "@/components/admin/AdminLayout";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { formatListingPrice } from "@/lib/priceUtils";
 
 interface Listing {
   id: string;
@@ -337,21 +338,12 @@ const AdminListings = () => {
                         )}
                       </div>
                       <p className="text-sm text-muted-foreground">
-                        {(() => {
-                          const unit = listing.attributes?.priceUnit;
-                          let unitLabel = "";
-                          if (unit === "sqft") unitLabel = " / Sq Ft";
-                          else if (unit === "acre") unitLabel = " / Acre";
-                          else if (unit === "cent") unitLabel = " / Cent";
-                          else if (unit === "month") unitLabel = " / month";
-                          else if (unit === "unit") unitLabel = " / Unit";
-                          else if (unit) unitLabel = ` / ${unit}`;
-
-                          const depositVal = (listing as any).deposit ?? listing.attributes?.deposit;
-                          const depositText = depositVal ? `, Deposit ₹${Number(depositVal).toLocaleString()}` : "";
-
-                          return `₹${listing.price.toLocaleString()}${unitLabel}${depositText} • By ${listing.profiles.name}`;
-                        })()}
+                        {formatListingPrice(
+                          listing.price,
+                          listing.attributes?.priceUnit,
+                          (listing as any).deposit ?? listing.attributes?.deposit,
+                          listing.attributes?.displayPrice
+                        )} • By {listing.profiles.name}
                       </p>
                       <p className="text-xs text-muted-foreground">
                         {new Date(listing.created_at).toLocaleDateString()}

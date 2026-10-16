@@ -9,6 +9,7 @@ import { supabase } from "@/integrations/supabase/client";
 import { MapPin, Trash2, Edit } from "lucide-react";
 import { toast } from "sonner";
 import { useAuth } from "@/hooks/useAuth";
+import { formatListingPrice } from "@/lib/priceUtils";
 import {
   AlertDialog,
   AlertDialogAction,
@@ -259,21 +260,12 @@ const MyListings = () => {
                     )}
                   </h3>
                   <p className="text-xl font-bold text-primary mb-2">
-                    {(() => {
-                      const unit = listing.attributes?.priceUnit;
-                      let unitLabel = "";
-                      if (unit === "sqft") unitLabel = " / Sq Ft";
-                      else if (unit === "acre") unitLabel = " / Acre";
-                      else if (unit === "cent") unitLabel = " / Cent";
-                      else if (unit === "month") unitLabel = " / month";
-                      else if (unit === "unit") unitLabel = " / Unit";
-                      else if (unit) unitLabel = ` / ${unit}`;
-
-                      const depositVal = (listing as any).deposit ?? listing.attributes?.deposit;
-                      const depositText = depositVal ? `, Deposit ₹${Number(depositVal).toLocaleString()}` : "";
-
-                      return `₹${listing.price.toLocaleString()}${unitLabel}${depositText}`;
-                    })()}
+                    {formatListingPrice(
+                      listing.price,
+                      listing.attributes?.priceUnit,
+                      (listing as any).deposit ?? listing.attributes?.deposit,
+                      listing.attributes?.displayPrice
+                    )}
                   </p>
                   <div className="flex items-center text-sm text-muted-foreground mb-3">
                     <MapPin className="h-4 w-4 mr-1" />
