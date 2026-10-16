@@ -21,6 +21,7 @@ const AdminAddListing = () => {
   const [formData, setFormData] = useState({
     title: "",
     price: "",
+    deposit: "",
     description: "",
     categoryId: "",
     city: "",
@@ -58,33 +59,76 @@ const AdminAddListing = () => {
       toast.error("Please select a subcategory");
       return;
     }
+    if (selectedCategorySlug === "properties" && subCategory === "rent" && !formData.deposit) {
+      toast.error("Please enter the deposit amount for rent");
+      return;
+    }
 
     setLoading(true);
     try {
       const { data: { user } } = await supabase.auth.getUser();
       if (!user) throw new Error("No admin user found");
 
-      // 1. Create Listing
-      const { data: listing, error: listingError } = await supabase
-        .from("listings")
-        .insert({
-          user_id: user.id,
-          category_id: formData.categoryId,
-          title: formData.title,
-          price: parseFloat(formData.price),
-          description: formData.description,
-          location_city: formData.city,
-          location_locality: formData.locality || null,
-          seller_name: formData.sellerName,
-          seller_email: formData.sellerEmail,
-          seller_phone: formData.sellerPhone,
-          status: "active",
-          attributes: selectedCategorySlug ? (selectedCategorySlug === 'properties' ? { subCategory, priceUnit } : { subCategory }) : {},
-        })
-        .select()
-        .single();
+      const depositVal = selectedCategorySlug === "properties" && subCategory === "rent" && formData.deposit
+        ? parseFloat(formData.deposit)
+        : undefined;
 
-      if (listingError) throw listingError;
+      const attributesPayload = selectedCategorySlug
+        ? (selectedCategorySlug === 'properties'
+            ? { subCategory, priceUnit, deposit: depositVal }
+            : { subCategory })
+        : {};
+
+      const basePayload: any = {
+        user_id: user.id,
+        category_id: formData.categoryId,
+        title: formData.title,
+        price: parseFloat(formData.price),
+        description: formData.description,
+        location_city: formData.city,
+        location_locality: formData.locality || null,
+        seller_name: formData.sellerName,
+        seller_email: formData.sellerEmail,
+        seller_phone: formData.sellerPhone,
+        status: "active",
+        attributes: attributesPayload,
+      };
+
+      // 1. Create Listing (with fallback if deposit column doesn't exist yet)
+      let listingRes;
+      try {
+        listingRes = await supabase
+          .from("listings")
+          .insert({
+            ...basePayload,
+            deposit: depositVal ?? null,
+          })
+          .select()
+          .single();
+      } catch (err: any) {
+        if (err?.code === "42703") {
+          listingRes = await supabase
+            .from("listings")
+            .insert(basePayload)
+            .select()
+            .single();
+        } else {
+          throw err;
+        }
+      }
+
+      if (listingRes.error) {
+        if (listingRes.error.code === "42703") {
+          listingRes = await supabase
+            .from("listings")
+            .insert(basePayload)
+            .select()
+            .single();
+        }
+        if (listingRes.error) throw listingRes.error;
+      }
+
+      const listing = listingRes.data;
 
       // 2. Add Images
       if (imageUrls.length > 0) {
@@ -154,7 +198,19 @@ const AdminAddListing = () => {
               {selectedCategorySlug && (
                 <div className="space-y-2 animate-in fade-in slide-in-from-top-1 duration-200">
                   <Label htmlFor="subCategory">Subcategory *</Label>
-                  <Select value={subCategory} onValueChange={setSubCategory}>
+                  <Select 
+                    value={subCategory} 
+                    onValueChange={(val) => {
+                      setSubCategory(val);
+                      if (selectedCategorySlug === "properties") {
+                        if (val === "rent") {
+                          setPriceUnit("month");
+                        } else if (priceUnit === "month") {
+                          setPriceUnit("unit");
+                        }
+                      }
+                    }}
+                  >
                     <SelectTrigger>
                       <SelectValue placeholder="Select Subcategory" />
                     </SelectTrigger>
@@ -173,14 +229,16 @@ const AdminAddListing = () => {
 
               <div className="grid md:grid-cols-2 gap-4">
                 <div className="space-y-2">
-                  <Label htmlFor="price">Price (₹) *</Label>
+                  <Label htmlFor="price">
+                    {selectedCategorySlug === "properties" && subCategory === "rent" ? "Rent per month (₹) *" : "Price (₹) *"}
+                  </Label>
                   {selectedCategorySlug === "properties" ? (
                     <div className="grid grid-cols-3 gap-2">
                       <div className="col-span-2">
                         <Input 
                           id="price" 
                           type="number" 
-                          placeholder="5000000" 
+                          placeholder={subCategory === "rent" ? "Enter monthly rent" : "5000000"} 
                           value={formData.price}
                           onChange={(e) => setFormData({...formData, price: e.target.value})}
                           required 
@@ -194,6 +252,8 @@ const AdminAddListing = () => {
                           <SelectContent>
                             <SelectItem value="sqft">Per Sq Ft</SelectItem>
                             <SelectItem value="acre">Per Acre</SelectItem>
+                            <SelectItem value="cent">Per Cent</SelectItem>
+                            <SelectItem value="month">Per Month</SelectItem>
                             <SelectItem value="unit">Per Unit</SelectItem>
                           </SelectContent>
                         </Select>
@@ -221,6 +281,20 @@ const AdminAddListing = () => {
                   />
                 </div>
               </div>
+
+              {selectedCategorySlug === "properties" && subCategory === "rent" && (
+                <div className="space-y-2 animate-in fade-in slide-in-from-top-1 duration-200">
+                  <Label htmlFor="deposit">Deposit (₹) *</Label>
+                  <Input 
+                    id="deposit" 
+                    type="number" 
+                    placeholder="Enter deposit amount" 
+                    value={formData.deposit}
+                    onChange={(e) => setFormData({...formData, deposit: e.target.value})}
+                    required 
+                  />
+                </div>
+              )}
 
               <div className="space-y-2">
                 <Label htmlFor="description">Description</Label>

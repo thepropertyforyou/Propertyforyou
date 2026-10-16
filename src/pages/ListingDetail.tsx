@@ -59,9 +59,17 @@ const ListingDetail = () => {
       }
 
       // Format data for display
-      const priceUnitLabel = data.attributes?.priceUnit 
-        ? ` / ${data.attributes.priceUnit === 'sqft' ? 'Sq Ft' : data.attributes.priceUnit === 'acre' ? 'Acre' : 'Unit'}`
-        : '';
+      const priceUnit = data.attributes?.priceUnit;
+      let priceUnitLabel = '';
+      if (priceUnit === 'sqft') priceUnitLabel = ' / Sq Ft';
+      else if (priceUnit === 'acre') priceUnitLabel = ' / Acre';
+      else if (priceUnit === 'cent') priceUnitLabel = ' / Cent';
+      else if (priceUnit === 'month') priceUnitLabel = ' / month';
+      else if (priceUnit === 'unit') priceUnitLabel = ' / Unit';
+      else if (priceUnit) priceUnitLabel = ` / ${priceUnit}`;
+
+      const depositAmount = (data as any).deposit ?? data.attributes?.deposit;
+      const depositText = depositAmount ? `, Deposit ₹${Number(depositAmount).toLocaleString()}` : '';
 
       const formattedListing = {
         ...data,
@@ -70,7 +78,8 @@ const ListingDetail = () => {
           .map((img: any) => img.image_url) || [],
         category: data.categories?.name,
         location: `${data.location_city}${data.location_locality ? ', ' + data.location_locality : ''}`,
-        price: `₹${Number(data.price).toLocaleString()}${priceUnitLabel}`,
+        price: `₹${Number(data.price).toLocaleString()}${priceUnitLabel}${depositText}`,
+        deposit: depositAmount,
         sellerName: data.seller_name,
         phone: data.seller_phone,
         email: data.seller_email,
@@ -313,6 +322,12 @@ const ListingDetail = () => {
                       <div className="flex justify-between py-2 px-3 bg-muted/50 rounded-lg">
                         <span className="text-muted-foreground">Purity</span>
                         <span className="font-medium uppercase">{listing.purity}</span>
+                      </div>
+                    )}
+                    {listing.deposit && (
+                      <div className="flex justify-between py-2 px-3 bg-muted/50 rounded-lg">
+                        <span className="text-muted-foreground">Security Deposit</span>
+                        <span className="font-medium">₹{Number(listing.deposit).toLocaleString()}</span>
                       </div>
                     )}
                   </div>

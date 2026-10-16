@@ -235,9 +235,21 @@ const AdminListingDetail = () => {
             <div>
               <h1 className="text-3xl font-bold text-foreground mb-2">{listing.title}</h1>
               <p className="text-3xl font-bold text-primary">
-                {listing.attributes?.priceUnit 
-                  ? `₹${listing.price.toLocaleString()} / ${listing.attributes.priceUnit === 'sqft' ? 'Sq Ft' : listing.attributes.priceUnit === 'acre' ? 'Acre' : 'Unit'}`
-                  : `₹${listing.price.toLocaleString()}`}
+                {(() => {
+                  const unit = listing.attributes?.priceUnit;
+                  let unitLabel = "";
+                  if (unit === "sqft") unitLabel = " / Sq Ft";
+                  else if (unit === "acre") unitLabel = " / Acre";
+                  else if (unit === "cent") unitLabel = " / Cent";
+                  else if (unit === "month") unitLabel = " / month";
+                  else if (unit === "unit") unitLabel = " / Unit";
+                  else if (unit) unitLabel = ` / ${unit}`;
+
+                  const depositVal = (listing as any).deposit ?? listing.attributes?.deposit;
+                  const depositText = depositVal ? `, Deposit ₹${Number(depositVal).toLocaleString()}` : "";
+
+                  return `₹${listing.price.toLocaleString()}${unitLabel}${depositText}`;
+                })()}
               </p>
             </div>
 

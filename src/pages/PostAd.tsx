@@ -130,6 +130,7 @@ const PostAd = () => {
     title: "", brand: "", model: "", year: "", fuelType: "", kmDriven: "",
     ownership: "", condition: "", propertyType: "", size: "", bedrooms: "",
     furnishing: "", type: "", material: "", weight: "", purity: "", price: "",
+    deposit: "",
     description: "", state: "", district: "", taluk: "", sellerPhone: "",
   });
 
@@ -268,7 +269,6 @@ const PostAd = () => {
             }
           }
           setCurrentStep(targetStep);
-          toast.info("Resumed previous progress");
         }
       } catch (err) {
         console.error("Error restoring progress:", err);
@@ -511,6 +511,10 @@ const PostAd = () => {
       toast.error("Please select a subcategory");
       return false;
     }
+    if (subCategory === "rent" && (!formData.deposit || parseFloat(formData.deposit) < 0 || isNaN(parseFloat(formData.deposit)))) {
+      toast.error("Please enter a valid deposit amount for rental listing");
+      return false;
+    }
     if (postingType !== "free") {
       if (!formData.description.trim()) {
         toast.error("Description required for featured/popup listings");
@@ -629,6 +633,9 @@ const PostAd = () => {
         attributes.size = formData.size;
         attributes.bedrooms = formData.bedrooms;
         attributes.furnishing = formData.furnishing;
+        if (subCategory === "rent" && formData.deposit) {
+          attributes.deposit = parseFloat(formData.deposit);
+        }
       }
 
       // Attach chosen plan, price, date, and slot if featured or popup
@@ -656,7 +663,7 @@ const PostAd = () => {
       const listingStatus = postingType === "popup" ? "popup" : "pending";
       const sellerPhone = postingType === "free" ? "+91 1234567890" : (formData.sellerPhone || profile.phone);
 
-      const { data: listing, error: listingError } = await supabase.from("listings").insert({
+      const listingPayload: any = {
         user_id: user.id,
         category_id: categoryId,
         title,
@@ -670,7 +677,20 @@ const PostAd = () => {
         attributes,
         is_featured: isFeatured,
         status: listingStatus,
-      }).select().single();
+      };
+
+      if (subCategory === "rent" && formData.deposit) {
+        listingPayload.deposit = parseFloat(formData.deposit);
+      }
+
+      let { data: listing, error: listingError } = await supabase.from("listings").insert(listingPayload).select().single();
+
+      if (listingError && (listingError.message?.includes("deposit") || (listingError as any).code === "42703")) {
+        delete listingPayload.deposit;
+        const retry = await supabase.from("listings").insert(listingPayload).select().single();
+        listing = retry.data;
+        listingError = retry.error;
+      }
 
       if (listingError) throw listingError;
 
@@ -936,9 +956,36 @@ const PostAd = () => {
               <div className="flex flex-wrap gap-3">
                 {category === "properties" && (
                   <>
-                    <Button type="button" variant={subCategory === "sales" ? "default" : "outline"} onClick={() => setSubCategory("sales")}>Sales</Button>
-                    <Button type="button" variant={subCategory === "rent" ? "default" : "outline"} onClick={() => setSubCategory("rent")}>Rent</Button>
-                    <Button type="button" variant={subCategory === "lease" ? "default" : "outline"} onClick={() => setSubCategory("lease")}>Lease</Button>
+                    <Button 
+                      type="button" 
+                      variant={subCategory === "sales" ? "default" : "outline"} 
+                      onClick={() => {
+                        setSubCategory("sales");
+                        if (priceUnit === "month") setPriceUnit("unit");
+                      }}
+                    >
+                      Sales
+                    </Button>
+                    <Button 
+                      type="button" 
+                      variant={subCategory === "rent" ? "default" : "outline"} 
+                      onClick={() => {
+                        setSubCategory("rent");
+                        setPriceUnit("month");
+                      }}
+                    >
+                      Rent
+                    </Button>
+                    <Button 
+                      type="button" 
+                      variant={subCategory === "lease" ? "default" : "outline"} 
+                      onClick={() => {
+                        setSubCategory("lease");
+                        if (priceUnit === "month") setPriceUnit("unit");
+                      }}
+                    >
+                      Lease
+                    </Button>
                   </>
                 )}
               </div>
@@ -959,11 +1006,19 @@ const PostAd = () => {
                   <Input id="title" value={formData.title} onChange={(e) => setFormData({ ...formData, title: e.target.value })} placeholder="Enter title" />
                 </div>
                 <div className="space-y-2">
-                  <Label htmlFor="price">Price (₹) *</Label>
+                  <Label htmlFor="price">
+                    {subCategory === "rent" ? "Rent per month (₹) *" : "Price (₹) *"}
+                  </Label>
                   {category === "properties" ? (
                     <div className="grid grid-cols-3 gap-2">
                       <div className="col-span-2">
-                        <Input id="price" type="number" value={formData.price} onChange={(e) => setFormData({ ...formData, price: e.target.value })} placeholder="Enter price" />
+                        <Input 
+                          id="price" 
+                          type="number" 
+                          value={formData.price} 
+                          onChange={(e) => setFormData({ ...formData, price: e.target.value })} 
+                          placeholder={subCategory === "rent" ? "Enter monthly rent" : "Enter price"} 
+                        />
                       </div>
                       <div>
                         <Select value={priceUnit} onValueChange={setPriceUnit}>
@@ -973,6 +1028,8 @@ const PostAd = () => {
                           <SelectContent>
                             <SelectItem value="sqft">Per Sq Ft</SelectItem>
                             <SelectItem value="acre">Per Acre</SelectItem>
+                            <SelectItem value="cent">Per Cent</SelectItem>
+                            <SelectItem value="month">Per Month</SelectItem>
                             <SelectItem value="unit">Per Unit</SelectItem>
                           </SelectContent>
                         </Select>
@@ -982,6 +1039,20 @@ const PostAd = () => {
                     <Input id="price" type="number" value={formData.price} onChange={(e) => setFormData({ ...formData, price: e.target.value })} placeholder="Enter price" />
                   )}
                 </div>
+
+                {subCategory === "rent" && (
+                  <div className="space-y-2">
+                    <Label htmlFor="deposit">Deposit (₹) *</Label>
+                    <Input 
+                      id="deposit" 
+                      type="number" 
+                      value={formData.deposit} 
+                      onChange={(e) => setFormData({ ...formData, deposit: e.target.value })} 
+                      placeholder="Enter security deposit amount" 
+                      required 
+                    />
+                  </div>
+                )}
                 {postingType !== "free" && (
                   <>
                     <div className="space-y-2">
@@ -1525,9 +1596,24 @@ const PostAd = () => {
                   <p className="font-semibold text-base mt-0.5">{formData.title}</p>
                 </div>
                 <div>
-                  <span className="text-muted-foreground text-xs uppercase">Property Price:</span>
-                  <p className="font-semibold text-base mt-0.5">₹{parseFloat(formData.price).toLocaleString()}</p>
+                  <span className="text-muted-foreground text-xs uppercase">{subCategory === "rent" ? "Rent per month:" : "Property Price:"}</span>
+                  <p className="font-semibold text-base mt-0.5">
+                    ₹{parseFloat(formData.price).toLocaleString()}
+                    {category === "properties" && priceUnit && (
+                      <span className="text-sm font-normal text-muted-foreground ml-1">
+                        / {priceUnit === "sqft" ? "Sq Ft" : priceUnit === "acre" ? "Acre" : priceUnit === "cent" ? "Cent" : priceUnit === "month" ? "month" : "Unit"}
+                      </span>
+                    )}
+                  </p>
                 </div>
+                {subCategory === "rent" && formData.deposit && (
+                  <div>
+                    <span className="text-muted-foreground text-xs uppercase">Security Deposit:</span>
+                    <p className="font-semibold text-base mt-0.5 text-foreground">
+                      ₹{parseFloat(formData.deposit).toLocaleString()}
+                    </p>
+                  </div>
+                )}
                 <div>
                   <span className="text-muted-foreground text-xs uppercase">Chosen Plan:</span>
                   <p className="font-medium mt-0.5">{selectedPlan?.name} ({selectedPlan?.duration_days} Days)</p>

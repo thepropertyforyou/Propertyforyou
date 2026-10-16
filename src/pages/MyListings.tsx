@@ -259,9 +259,21 @@ const MyListings = () => {
                     )}
                   </h3>
                   <p className="text-xl font-bold text-primary mb-2">
-                    {listing.attributes?.priceUnit 
-                      ? `₹${listing.price.toLocaleString()} / ${listing.attributes.priceUnit === 'sqft' ? 'Sq Ft' : listing.attributes.priceUnit === 'acre' ? 'Acre' : 'Unit'}`
-                      : `₹${listing.price.toLocaleString()}`}
+                    {(() => {
+                      const unit = listing.attributes?.priceUnit;
+                      let unitLabel = "";
+                      if (unit === "sqft") unitLabel = " / Sq Ft";
+                      else if (unit === "acre") unitLabel = " / Acre";
+                      else if (unit === "cent") unitLabel = " / Cent";
+                      else if (unit === "month") unitLabel = " / month";
+                      else if (unit === "unit") unitLabel = " / Unit";
+                      else if (unit) unitLabel = ` / ${unit}`;
+
+                      const depositVal = (listing as any).deposit ?? listing.attributes?.deposit;
+                      const depositText = depositVal ? `, Deposit ₹${Number(depositVal).toLocaleString()}` : "";
+
+                      return `₹${listing.price.toLocaleString()}${unitLabel}${depositText}`;
+                    })()}
                   </p>
                   <div className="flex items-center text-sm text-muted-foreground mb-3">
                     <MapPin className="h-4 w-4 mr-1" />

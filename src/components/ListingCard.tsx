@@ -12,6 +12,7 @@ interface ListingCardProps {
     price: number;
     location_city: string;
     location_locality: string | null;
+    deposit?: number | null;
     is_featured?: boolean;
     listing_images?: { image_url: string; display_order?: number }[];
     categories?: { name: string };
@@ -128,9 +129,21 @@ export const ListingCard = ({ listing }: ListingCardProps) => {
         </h3>
         
         <p className="text-xl font-bold text-primary mb-2">
-          {listing.attributes?.priceUnit 
-            ? `₹${listing.price.toLocaleString()} / ${listing.attributes.priceUnit === 'sqft' ? 'Sq Ft' : listing.attributes.priceUnit === 'acre' ? 'Acre' : 'Unit'}`
-            : `₹${listing.price.toLocaleString()}`}
+          {(() => {
+            const unit = listing.attributes?.priceUnit;
+            let unitLabel = "";
+            if (unit === "sqft") unitLabel = " / Sq Ft";
+            else if (unit === "acre") unitLabel = " / Acre";
+            else if (unit === "cent") unitLabel = " / Cent";
+            else if (unit === "month") unitLabel = " / month";
+            else if (unit === "unit") unitLabel = " / Unit";
+            else if (unit) unitLabel = ` / ${unit}`;
+
+            const depositVal = (listing as any).deposit ?? listing.attributes?.deposit;
+            const depositText = depositVal ? `, Deposit ₹${Number(depositVal).toLocaleString()}` : "";
+
+            return `₹${listing.price.toLocaleString()}${unitLabel}${depositText}`;
+          })()}
         </p>
         
         <div className="mt-auto flex items-center text-sm text-muted-foreground">

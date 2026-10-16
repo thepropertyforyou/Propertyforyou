@@ -337,9 +337,21 @@ const AdminListings = () => {
                         )}
                       </div>
                       <p className="text-sm text-muted-foreground">
-                        {listing.attributes?.priceUnit 
-                          ? `₹${listing.price.toLocaleString()} / ${listing.attributes.priceUnit === 'sqft' ? 'Sq Ft' : listing.attributes.priceUnit === 'acre' ? 'Acre' : 'Unit'}`
-                          : `₹${listing.price.toLocaleString()}`} • By {listing.profiles.name}
+                        {(() => {
+                          const unit = listing.attributes?.priceUnit;
+                          let unitLabel = "";
+                          if (unit === "sqft") unitLabel = " / Sq Ft";
+                          else if (unit === "acre") unitLabel = " / Acre";
+                          else if (unit === "cent") unitLabel = " / Cent";
+                          else if (unit === "month") unitLabel = " / month";
+                          else if (unit === "unit") unitLabel = " / Unit";
+                          else if (unit) unitLabel = ` / ${unit}`;
+
+                          const depositVal = (listing as any).deposit ?? listing.attributes?.deposit;
+                          const depositText = depositVal ? `, Deposit ₹${Number(depositVal).toLocaleString()}` : "";
+
+                          return `₹${listing.price.toLocaleString()}${unitLabel}${depositText} • By ${listing.profiles.name}`;
+                        })()}
                       </p>
                       <p className="text-xs text-muted-foreground">
                         {new Date(listing.created_at).toLocaleDateString()}

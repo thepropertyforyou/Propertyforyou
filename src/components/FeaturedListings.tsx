@@ -35,6 +35,7 @@ const FeaturedListings = () => {
           location_city,
           location_locality,
           category_id,
+          attributes,
           categories (name, slug),
           listing_images (image_url, display_order)
         `)

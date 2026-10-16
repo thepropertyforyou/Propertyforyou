@@ -24,6 +24,7 @@ const AdminEditListing = () => {
   const [formData, setFormData] = useState({
     title: "",
     price: "",
+    deposit: "",
     description: "",
     categoryId: "",
     city: "",
@@ -71,9 +72,11 @@ const AdminEditListing = () => {
       if (error) throw error;
 
       if (listing) {
+        const depositVal = (listing as any).deposit ?? (listing.attributes as any)?.deposit;
         setFormData({
           title: listing.title,
           price: listing.price.toString(),
+          deposit: depositVal !== undefined && depositVal !== null ? depositVal.toString() : "",
           description: listing.description || "",
           categoryId: listing.category_id,
           city: listing.location_city,
@@ -110,6 +113,11 @@ const AdminEditListing = () => {
       toast.error("Please select a subcategory");
       return;
     }
+    if (selectedCategorySlug === "properties" && subCategory === "rent" && !formData.deposit) {
+      toast.error("Please enter the deposit amount for rent");
+      return;
+    }
+
     setSaving(true);
     try {
       // Fetch current attributes to preserve other properties if any
@@ -123,32 +131,64 @@ const AdminEditListing = () => {
         ? currentListing.attributes 
         : {};
 
+      const depositNum = selectedCategorySlug === "properties" && subCategory === "rent" && formData.deposit
+        ? parseFloat(formData.deposit)
+        : undefined;
+
       const updatedAttributes = {
         ...currentAttributes,
         subCategory: selectedCategorySlug ? subCategory : undefined,
         priceUnit: selectedCategorySlug === 'properties' ? priceUnit : undefined,
+        deposit: depositNum,
       };
 
-      // 1. Update Listing
-      const { error: listingError } = await supabase
-        .from("listings")
-        .update({
-          category_id: formData.categoryId,
-          title: formData.title,
-          price: parseFloat(formData.price),
-          description: formData.description,
-          location_city: formData.city,
-          location_locality: formData.locality || null,
-          seller_name: formData.sellerName,
-          seller_email: formData.sellerEmail,
-          seller_phone: formData.sellerPhone,
-          status: formData.status,
-          is_featured: formData.isFeatured,
-          attributes: updatedAttributes,
-        })
-        .eq("id", id);
+      const updatePayload: any = {
+        category_id: formData.categoryId,
+        title: formData.title,
+        price: parseFloat(formData.price),
+        description: formData.description,
+        location_city: formData.city,
+        location_locality: formData.locality || null,
+        seller_name: formData.sellerName,
+        seller_email: formData.sellerEmail,
+        seller_phone: formData.sellerPhone,
+        status: formData.status,
+        is_featured: formData.isFeatured,
+        attributes: updatedAttributes,
+      };
 
-      if (listingError) throw listingError;
+      // 1. Update Listing (with fallback if deposit column does not exist yet)
+      try {
+        const { error: listingError } = await supabase
+          .from("listings")
+          .update({
+            ...updatePayload,
+            deposit: depositNum ?? null,
+          })
+          .eq("id", id);
+
+        if (listingError) {
+          if (listingError.code === "42703") {
+            const { error: fallbackErr } = await supabase
+              .from("listings")
+              .update(updatePayload)
+              .eq("id", id);
+            if (fallbackErr) throw fallbackErr;
+          } else {
+            throw listingError;
+          }
+        }
+      } catch (err: any) {
+        if (err?.code === "42703") {
+          const { error: fallbackErr } = await supabase
+            .from("listings")
+            .update(updatePayload)
+            .eq("id", id);
+          if (fallbackErr) throw fallbackErr;
+        } else {
+          throw err;
+        }
+      }
 
       // 2. Refresh Images (Delete old and insert new to maintain order)
       await supabase.from("listing_images").delete().eq("listing_id", id);
@@ -234,7 +274,19 @@ const AdminEditListing = () => {
               {selectedCategorySlug && (
                 <div className="space-y-2 animate-in fade-in slide-in-from-top-1 duration-200">
                   <Label htmlFor="subCategory">Subcategory *</Label>
-                  <Select value={subCategory} onValueChange={setSubCategory}>
+                  <Select 
+                    value={subCategory} 
+                    onValueChange={(val) => {
+                      setSubCategory(val);
+                      if (selectedCategorySlug === "properties") {
+                        if (val === "rent") {
+                          setPriceUnit("month");
+                        } else if (priceUnit === "month") {
+                          setPriceUnit("unit");
+                        }
+                      }
+                    }}
+                  >
                     <SelectTrigger>
                       <SelectValue placeholder="Select Subcategory" />
                     </SelectTrigger>
@@ -253,14 +305,16 @@ const AdminEditListing = () => {
 
               <div className="grid md:grid-cols-2 gap-4">
                 <div className="space-y-2">
-                  <Label htmlFor="price">Price (₹) *</Label>
+                  <Label htmlFor="price">
+                    {selectedCategorySlug === "properties" && subCategory === "rent" ? "Rent per month (₹) *" : "Price (₹) *"}
+                  </Label>
                   {selectedCategorySlug === "properties" ? (
                     <div className="grid grid-cols-3 gap-2">
                       <div className="col-span-2">
                         <Input 
                           id="price" 
                           type="number" 
-                          placeholder="5000000" 
+                          placeholder={subCategory === "rent" ? "Enter monthly rent" : "5000000"} 
                           value={formData.price}
                           onChange={(e) => setFormData({...formData, price: e.target.value})}
                           required 
@@ -274,6 +328,8 @@ const AdminEditListing = () => {
                           <SelectContent>
                             <SelectItem value="sqft">Per Sq Ft</SelectItem>
                             <SelectItem value="acre">Per Acre</SelectItem>
+                            <SelectItem value="cent">Per Cent</SelectItem>
+                            <SelectItem value="month">Per Month</SelectItem>
                             <SelectItem value="unit">Per Unit</SelectItem>
                           </SelectContent>
                         </Select>
@@ -300,6 +356,20 @@ const AdminEditListing = () => {
                   />
                 </div>
               </div>
+
+              {selectedCategorySlug === "properties" && subCategory === "rent" && (
+                <div className="space-y-2 animate-in fade-in slide-in-from-top-1 duration-200">
+                  <Label htmlFor="deposit">Deposit (₹) *</Label>
+                  <Input 
+                    id="deposit" 
+                    type="number" 
+                    placeholder="Enter deposit amount" 
+                    value={formData.deposit}
+                    onChange={(e) => setFormData({...formData, deposit: e.target.value})}
+                    required 
+                  />
+                </div>
+              )}
 
               <div className="space-y-2">
                 <Label htmlFor="description">Description</Label>
