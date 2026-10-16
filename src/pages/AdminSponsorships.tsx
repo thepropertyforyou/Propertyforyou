@@ -289,9 +289,10 @@ const AdminSponsorships = () => {
                       bucket="sponsorship-banners"
                       onUploadComplete={(url) => setNewSponsorship({...newSponsorship, bannerUrl: url})}
                       label="Ad Banner *"
+                      aspectRatio={16 / 9}
                       targetWidth={1280}
                       targetHeight={720}
-                      recommendedSize="Recommended: 1280 × 720 px"
+                      recommendedSize="Recommended: 1280 × 720 px (16:9)"
                    />
                 </div>
                 <div className="space-y-2">
@@ -423,16 +424,17 @@ const AdminSponsorships = () => {
                             <img
                               src={sponsorship.banner_url}
                               alt="Banner"
-                              className="w-full rounded-lg border mb-2"
+                              className="w-full rounded-lg border mb-2 aspect-[16/9] object-cover"
                             />
                             <div className="w-full">
                                <ImageUpload 
                                   bucket="sponsorship-banners"
                                   onUploadComplete={(url) => handleFileUpload(sponsorship.id, url, 'banner_url')}
                                   label="Change Banner"
+                                  aspectRatio={16 / 9}
                                   targetWidth={1280}
                                   targetHeight={720}
-                                  recommendedSize="Recommended: 1280 × 720 px"
+                                  recommendedSize="Recommended: 1280 × 720 px (16:9)"
                                />
                             </div>
                           </div>

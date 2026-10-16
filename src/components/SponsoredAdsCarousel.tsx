@@ -91,8 +91,8 @@ const SponsoredAdsCarousel = () => {
                   className="overflow-hidden cursor-pointer hover:shadow-lg transition-all"
                   onClick={() => handleClick(sponsorship)}
                 >
-                  {/* Banner Image with compact aspect ratio */}
-                  <div className="relative aspect-[16/7] bg-muted">
+                  {/* Banner Image at 16:9 (1280 × 720) */}
+                  <div className="relative aspect-[16/9] bg-muted">
                     <img
                       src={sponsorship.banner_url}
                       alt={sponsorship.business_name}

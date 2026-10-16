@@ -309,7 +309,7 @@ export function ImageCropperDialog({
     if (targetWidth && targetHeight) {
       if (Math.abs(targetWidth / targetHeight - 720 / 1280) < 0.05) return "Popup Ad (720 × 1280 Portrait)";
       if (Math.abs(targetWidth / targetHeight - 4 / 3) < 0.05) return "Property Frame (4:3)";
-      if (Math.abs(targetWidth / targetHeight - 16 / 9) < 0.05) return "Landscape (16:9)";
+      if (Math.abs(targetWidth / targetHeight - 16 / 9) < 0.05) return "16:9 (1280 × 720)";
       if (Math.abs(targetWidth / targetHeight - 1) < 0.05) return "Square (1:1)";
       return `${targetWidth} × ${targetHeight} px`;
     }
