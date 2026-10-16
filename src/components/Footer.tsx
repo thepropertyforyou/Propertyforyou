@@ -10,11 +10,11 @@ const Footer = () => {
   ];
 
   const locations = [
-    "Bangalore",
-    "Mysore",
-    "Hubli",
     "Mangalore",
-    "Belgaum",
+    "Surathkal",
+    "Padubidri",
+    "Kapu",
+    "Udupi",
   ];
 
   return (
@@ -60,7 +60,7 @@ const Footer = () => {
               {locations.map((location) => (
                 <li key={location}>
                   <Link
-                    to="/"
+                    to={`/properties?search=${encodeURIComponent(location)}`}
                     className="text-sm text-muted-foreground hover:text-primary transition-colors"
                   >
                     {location}
