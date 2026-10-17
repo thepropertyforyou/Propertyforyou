@@ -21,14 +21,13 @@ const Hero = () => {
 
   return (
     <section className="relative bg-background py-16 md:py-24 overflow-hidden">
-      {/* Background Image with Overlay */}
+      {/* Background Image */}
       <div className="absolute inset-0">
         <img
           src={heroBg}
           alt="Hero Background"
           className="w-full h-full object-cover object-center"
         />
-        <div className="absolute inset-0 bg-gradient-to-b from-background/90 via-background/80 to-background/95" />
       </div>
 
       {/* Content */}
