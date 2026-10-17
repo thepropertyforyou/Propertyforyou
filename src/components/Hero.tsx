@@ -26,7 +26,7 @@ const Hero = () => {
         <img
           src={heroBg}
           alt="Hero Background"
-          className="w-full h-full object-cover object-center"
+          className="w-full h-full object-cover object-[70%_center] md:object-center"
         />
       </div>
 
@@ -35,7 +35,7 @@ const Hero = () => {
         <div className="max-w-2xl text-left space-y-5">
           {/* Heading */}
           <div className="space-y-4">
-            <h1 className="text-4xl md:text-6xl lg:text-7xl font-bold leading-tight drop-shadow-sm">
+            <h1 className="text-4xl md:text-6xl lg:text-7xl font-extrabold leading-tight drop-shadow-sm">
               <span className="text-white">Buy. Sell. </span>
               <span className="text-[#007BFF]">Connect.</span>
             </h1>
@@ -45,9 +45,9 @@ const Hero = () => {
           </div>
 
           {/* Search Bar - Compact & Rectangular */}
-          <form onSubmit={handleSearch} className="max-w-xl pt-2">
+          <form onSubmit={handleSearch} className="w-[82%] sm:w-[80%] md:w-full max-w-xl pt-2">
             <div className="relative">
-              <Search className="absolute left-5 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+              <Search className="absolute left-3.5 md:left-5 top-1/2 -translate-y-1/2 h-3.5 w-3.5 md:h-4 md:w-4 text-muted-foreground" />
               <Input
                 type="text"
                 placeholder="Search properties..."
@@ -58,12 +58,12 @@ const Hero = () => {
                     handleSearch(e);
                   }
                 }}
-                className="pl-12 pr-28 h-12 bg-background/95 border-2 border-border rounded-lg text-sm shadow-lg backdrop-blur"
+                className="pl-9 pr-20 md:pl-12 md:pr-28 h-10 md:h-12 bg-background/95 border-2 border-border rounded-lg text-xs md:text-sm shadow-lg backdrop-blur"
               />
               <Button
                 type="submit"
                 size="sm"
-                className="absolute right-2 top-1/2 -translate-y-1/2 bg-primary hover:bg-primary/90 text-primary-foreground rounded-md px-6 h-9"
+                className="absolute right-1.5 md:right-2 top-1/2 -translate-y-1/2 bg-primary hover:bg-primary/90 text-primary-foreground rounded-md px-3 md:px-6 h-7 md:h-9 text-xs md:text-sm font-medium"
               >
                 Search
               </Button>
