@@ -3,6 +3,7 @@ import { Search } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { useNavigate } from "react-router-dom";
+import heroBg from "@/assets/hero-bg.png";
 
 const Hero = () => {
   const navigate = useNavigate();
@@ -20,13 +21,12 @@ const Hero = () => {
 
   return (
     <section className="relative bg-background py-16 md:py-24 overflow-hidden">
-      {/* Background Image with Overlay - Fixed */}
+      {/* Background Image with Overlay */}
       <div className="absolute inset-0">
         <img
-          src="https://i.pinimg.com/736x/68/0b/aa/680baa96545e9d1e21c9ae225b4b84bf.jpg"
-          alt="Background"
-          className="w-full h-full object-cover bg-fixed"
-          style={{ backgroundAttachment: 'fixed' }}
+          src={heroBg}
+          alt="Hero Background"
+          className="w-full h-full object-cover object-center"
         />
         <div className="absolute inset-0 bg-gradient-to-b from-background/90 via-background/80 to-background/95" />
       </div>
