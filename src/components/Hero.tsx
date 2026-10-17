@@ -32,19 +32,20 @@ const Hero = () => {
 
       {/* Content */}
       <div className="relative container mx-auto px-4">
-        <div className="max-w-4xl mx-auto text-center space-y-5">
+        <div className="max-w-2xl text-left space-y-5">
           {/* Heading */}
           <div className="space-y-4">
-            <h1 className="text-4xl md:text-6xl lg:text-7xl font-bold text-foreground leading-tight">
-              Buy. Sell. Connect.
+            <h1 className="text-4xl md:text-6xl lg:text-7xl font-bold leading-tight">
+              <span className="text-[#013B7B]">Buy. Sell. </span>
+              <span className="text-[#007BFF]">Connect.</span>
             </h1>
-            <p className="text-lg md:text-xl text-muted-foreground max-w-2xl mx-auto">
+            <p className="text-lg md:text-xl text-[#013B7B] max-w-2xl">
               Find verified listings for land and homes — all in one trusted place.
             </p>
           </div>
 
           {/* Search Bar - Compact & Rectangular */}
-          <form onSubmit={handleSearch} className="max-w-2xl mx-auto pt-2">
+          <form onSubmit={handleSearch} className="max-w-xl pt-2">
             <div className="relative">
               <Search className="absolute left-5 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
               <Input
