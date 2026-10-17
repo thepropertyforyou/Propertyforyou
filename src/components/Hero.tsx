@@ -35,11 +35,11 @@ const Hero = () => {
         <div className="max-w-2xl text-left space-y-5">
           {/* Heading */}
           <div className="space-y-4">
-            <h1 className="text-4xl md:text-6xl lg:text-7xl font-bold leading-tight">
-              <span className="text-[#013B7B]">Buy. Sell. </span>
+            <h1 className="text-4xl md:text-6xl lg:text-7xl font-bold leading-tight drop-shadow-sm">
+              <span className="text-white">Buy. Sell. </span>
               <span className="text-[#007BFF]">Connect.</span>
             </h1>
-            <p className="text-lg md:text-xl text-[#013B7B] max-w-2xl">
+            <p className="text-lg md:text-xl text-white max-w-2xl drop-shadow-sm">
               Find verified listings for land and homes — all in one trusted place.
             </p>
           </div>
