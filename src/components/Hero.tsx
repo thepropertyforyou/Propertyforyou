@@ -28,6 +28,8 @@ const Hero = () => {
           alt="Hero Background"
           className="w-full h-full object-cover object-[70%_center] md:object-center"
         />
+        {/* Soft white gradient overlay behind text and search bar only */}
+        <div className="absolute inset-y-0 left-0 w-[60%] bg-gradient-to-r from-white via-white/80 to-transparent pointer-events-none" />
       </div>
 
       {/* Content */}
@@ -35,11 +37,11 @@ const Hero = () => {
         <div className="max-w-2xl text-left space-y-5">
           {/* Heading */}
           <div className="space-y-4">
-            <h1 className="text-4xl md:text-6xl lg:text-7xl font-extrabold leading-tight drop-shadow-sm">
-              <span className="text-white">Buy. Sell. </span>
+            <h1 className="text-4xl md:text-6xl lg:text-7xl font-extrabold leading-tight">
+              <span className="text-[#013B7B]">Buy. Sell. </span>
               <span className="text-[#007BFF]">Connect.</span>
             </h1>
-            <p className="text-lg md:text-xl text-white max-w-2xl drop-shadow-sm">
+            <p className="text-lg md:text-xl text-[#013B7B] max-w-2xl">
               Find verified listings for land and homes — all in one trusted place.
             </p>
           </div>
