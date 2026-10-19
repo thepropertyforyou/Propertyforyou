@@ -28,8 +28,8 @@ const Hero = () => {
           alt="Hero Background"
           className="w-full h-full object-cover object-[70%_center] md:object-center"
         />
-        {/* Soft white gradient overlay behind text: narrower on mobile so red location pin is fully visible */}
-        <div className="absolute inset-y-0 left-0 w-[40%] sm:w-[48%] md:w-[60%] bg-gradient-to-r from-white via-white/70 to-transparent pointer-events-none" />
+        {/* Soft white gradient overlay: hidden on mobile, active on desktop only */}
+        <div className="hidden md:block absolute inset-y-0 left-0 w-[60%] bg-gradient-to-r from-white via-white/80 to-transparent pointer-events-none" />
       </div>
 
       {/* Content */}
@@ -37,11 +37,11 @@ const Hero = () => {
         <div className="max-w-2xl text-left space-y-5">
           {/* Heading */}
           <div className="space-y-4">
-            <h1 className="text-4xl md:text-6xl lg:text-7xl font-extrabold font-[800] leading-tight" style={{ fontWeight: 800 }}>
-              <span className="text-[#013B7B] font-extrabold font-[800]" style={{ fontWeight: 800 }}>Buy. Sell. </span>
-              <span className="text-[#007BFF] font-extrabold font-[800]" style={{ fontWeight: 800 }}>Connect.</span>
+            <h1 className="text-4xl md:text-6xl lg:text-7xl font-black md:font-extrabold font-[900] md:font-[800] leading-tight">
+              <span className="text-[#013B7B] font-black md:font-extrabold font-[900] md:font-[800]">Buy. Sell. </span>
+              <span className="text-[#007BFF] font-black md:font-extrabold font-[900] md:font-[800]">Connect.</span>
             </h1>
-            <p className="text-lg md:text-xl text-[#013B7B] max-w-2xl">
+            <p className="text-lg md:text-xl text-white md:text-[#013B7B] [text-shadow:_0_1px_3px_rgba(0,0,0,0.8),_0_2px_8px_rgba(0,0,0,0.6)] md:[text-shadow:none] max-w-2xl">
               Find verified listings for land and homes — all in one trusted place.
             </p>
           </div>

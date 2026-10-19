@@ -37,22 +37,8 @@ $$;
 
 GRANT EXECUTE ON FUNCTION public.is_admin() TO authenticated, anon, public;
 
--- Also ensure has_role handles text cleanly
-CREATE OR REPLACE FUNCTION public.has_role(_user_id UUID, _role text)
-RETURNS BOOLEAN
-LANGUAGE sql
-SECURITY DEFINER
-SET search_path = public
-STABLE
-AS $$
-  SELECT EXISTS (
-    SELECT 1 FROM public.user_roles
-    WHERE user_id = _user_id
-      AND role::text = _role
-  );
-$$;
-
-GRANT EXECUTE ON FUNCTION public.has_role(UUID, text) TO authenticated, anon, public;
+-- Remove ambiguous text overload so Supabase RPC cleanly calls has_role(uuid, app_role)
+DROP FUNCTION IF EXISTS public.has_role(_user_id UUID, _role text);
 
 -- 3. Configure Row Level Security (RLS) on public.sponsorship_plans
 ALTER TABLE public.sponsorship_plans ENABLE ROW LEVEL SECURITY;
