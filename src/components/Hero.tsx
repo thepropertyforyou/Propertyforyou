@@ -38,10 +38,10 @@ const Hero = () => {
           {/* Heading */}
           <div className="space-y-4">
             <h1 className="text-4xl md:text-6xl lg:text-7xl font-black md:font-extrabold font-[900] md:font-[800] leading-tight">
-              <span className="text-[#013B7B] font-black md:font-extrabold font-[900] md:font-[800]">Buy. Sell. </span>
-              <span className="text-[#007BFF] font-black md:font-extrabold font-[900] md:font-[800]">Connect.</span>
+              <span className="text-[#013B7B] md:text-white font-black md:font-extrabold font-[900] md:font-[800] md:[text-shadow:_0_2px_8px_rgba(0,0,0,0.6)]">Buy. Sell. </span>
+              <span className="text-[#007BFF] font-black md:font-extrabold font-[900] md:font-[800] md:[text-shadow:_0_2px_8px_rgba(0,0,0,0.4)]">Connect.</span>
             </h1>
-            <p className="text-lg md:text-xl text-white md:text-[#013B7B] [text-shadow:_0_1px_3px_rgba(0,0,0,0.8),_0_2px_8px_rgba(0,0,0,0.6)] md:[text-shadow:none] max-w-2xl">
+            <p className="text-lg md:text-xl text-white [text-shadow:_0_1px_3px_rgba(0,0,0,0.8),_0_2px_8px_rgba(0,0,0,0.6)] max-w-2xl">
               Find verified listings for land and homes — all in one trusted place.
             </p>
           </div>
