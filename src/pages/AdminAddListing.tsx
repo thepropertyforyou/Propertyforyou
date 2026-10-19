@@ -11,6 +11,7 @@ import { Badge } from "@/components/ui/badge";
 import { toast } from "sonner";
 import { supabase } from "@/integrations/supabase/client";
 import { ImageCropperDialog } from "@/components/common/ImageCropperDialog";
+import { addWatermarkToImage } from "@/utils/watermark";
 import { statesAndDistricts } from "@/data/india-locations";
 import { parsePriceToNumber } from "@/lib/priceUtils";
 import { Loader2, Upload, X } from "lucide-react";
@@ -72,12 +73,13 @@ const AdminAddListing = () => {
   const handleCropComplete = async (croppedFile: File) => {
     setIsUploadingImage(true);
     try {
+      const finalFile = await addWatermarkToImage(croppedFile);
       const { data: { user } } = await supabase.auth.getUser();
-      const fileExt = croppedFile.name.split(".").pop() || "jpg";
+      const fileExt = finalFile.name.split(".").pop() || "jpg";
       const fileName = `admin_${user?.id || "admin"}_${Date.now()}_${Math.random().toString(36).substring(7)}.${fileExt}`;
       const { error: uploadError } = await supabase.storage
         .from("listing-images")
-        .upload(fileName, croppedFile);
+        .upload(fileName, finalFile);
 
       if (uploadError) throw uploadError;
 

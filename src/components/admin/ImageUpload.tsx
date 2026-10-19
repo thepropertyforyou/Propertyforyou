@@ -5,6 +5,7 @@ import { Label } from "@/components/ui/label";
 import { Upload, X, Loader2, ImageIcon } from "lucide-react";
 import { toast } from "sonner";
 import { ImageCropperDialog } from "@/components/common/ImageCropperDialog";
+import { addWatermarkToImage } from "@/utils/watermark";
 
 interface ImageUploadProps {
   bucket: string;
@@ -15,6 +16,7 @@ interface ImageUploadProps {
   targetWidth?: number;
   targetHeight?: number;
   recommendedSize?: string;
+  watermark?: boolean;
 }
 
 const ImageUpload = ({
@@ -26,6 +28,7 @@ const ImageUpload = ({
   targetWidth,
   targetHeight,
   recommendedSize,
+  watermark = false,
 }: ImageUploadProps) => {
   const [uploading, setUploading] = useState(false);
   const [preview, setPreview] = useState<string | null>(defaultValue || null);
@@ -55,16 +58,18 @@ const ImageUpload = ({
     try {
       setUploading(true);
 
-      const localPreview = URL.createObjectURL(file);
+      const finalFile = watermark ? await addWatermarkToImage(file) : file;
+
+      const localPreview = URL.createObjectURL(finalFile);
       setPreview(localPreview);
 
-      const fileExt = file.name.split(".").pop() || 'jpg';
+      const fileExt = finalFile.name.split(".").pop() || 'jpg';
       const fileName = `${Math.random()}.${fileExt}`;
       const filePath = `${fileName}`;
 
       const { error: uploadError } = await supabase.storage
         .from(bucket)
-        .upload(filePath, file);
+        .upload(filePath, finalFile);
 
       if (uploadError) {
         throw uploadError;

@@ -219,6 +219,7 @@ const AdminListingDetail = () => {
               <div className="border-2 border-dashed rounded-lg flex items-center justify-center bg-muted/20 hover:bg-muted/50 transition-colors h-32">
                  <ImageUpload 
                     bucket="listing-images"
+                    watermark={true}
                     onUploadComplete={handleNewImageUpload}
                     label="Add Image"
                      targetWidth={1200}

@@ -16,6 +16,7 @@ import { useAuth } from "@/hooks/useAuth";
 import { supabase } from "@/integrations/supabase/client";
 import { Card } from "@/components/ui/card";
 import { ImageCropperDialog } from "@/components/common/ImageCropperDialog";
+import { addWatermarkToImage } from "@/utils/watermark";
 import { statesAndDistricts } from "@/data/india-locations";
 import { parsePriceToNumber, getPriceUnitLabel } from "@/lib/priceUtils";
 import {
@@ -458,9 +459,10 @@ const PostAd = () => {
   const handleCropComplete = async (croppedFile: File) => {
     setIsUploadingImage(true);
     try {
-      const fileExt = croppedFile.name.split(".").pop() || "jpg";
+      const finalFile = await addWatermarkToImage(croppedFile);
+      const fileExt = finalFile.name.split(".").pop() || "jpg";
       const fileName = `temp_${user?.id || 'anon'}_${Date.now()}_${Math.random().toString(36).substring(7)}.${fileExt}`;
-      const { error: uploadError } = await supabase.storage.from("listing-images").upload(fileName, croppedFile);
+      const { error: uploadError } = await supabase.storage.from("listing-images").upload(fileName, finalFile);
       if (uploadError) throw uploadError;
 
       const { data: { publicUrl } } = supabase.storage.from("listing-images").getPublicUrl(fileName);
