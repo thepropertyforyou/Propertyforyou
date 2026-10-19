@@ -11,6 +11,13 @@ import { Badge } from "@/components/ui/badge";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Switch } from "@/components/ui/switch";
 import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
+import {
   Loader2,
   ExternalLink,
   CheckCircle,
@@ -21,12 +28,7 @@ import {
   Trash2,
   Settings2,
   Calendar,
-  Layers,
-  Sparkles,
-  Phone,
-  Mail,
-  User,
-  Building,
+  RefreshCw,
 } from "lucide-react";
 import {
   Dialog,
@@ -37,6 +39,16 @@ import {
   DialogFooter,
   DialogDescription,
 } from "@/components/ui/dialog";
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@/components/ui/alert-dialog";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 
@@ -90,6 +102,29 @@ const AdminSponsorships = () => {
   const [customStartDate, setCustomStartDate] = useState("");
   const [customEndDate, setCustomEndDate] = useState("");
   const [customDatesOpen, setCustomDatesOpen] = useState(false);
+
+  // Delete sponsorship dialog state
+  const [deletingSponsorship, setDeletingSponsorship] = useState<Sponsorship | null>(null);
+  const [isDeleting, setIsDeleting] = useState(false);
+
+  // Edit sponsorship dialog state
+  const [editingSponsorship, setEditingSponsorship] = useState<Sponsorship | null>(null);
+  const [isEditSponsorshipOpen, setIsEditSponsorshipOpen] = useState(false);
+  const [isSavingEdit, setIsSavingEdit] = useState(false);
+  const [editForm, setEditForm] = useState({
+    id: "",
+    businessName: "",
+    contactPerson: "",
+    email: "",
+    phone: "",
+    destinationUrl: "",
+    duration: 7,
+    price: 199,
+    status: "Pending payment",
+    startDate: "",
+    endDate: "",
+    bannerUrl: "",
+  });
 
   // Manual sponsorship dialog state
   const [isCreatingManual, setIsCreatingManual] = useState(false);
@@ -232,6 +267,35 @@ const AdminSponsorships = () => {
     }
   };
 
+  // Restore expired sponsorship: sets start date of today, end date from duration, moves to active
+  const handleRestore = async (sponsorship: Sponsorship) => {
+    try {
+      const durationDays = sponsorship.duration || 7;
+      const startDate = new Date();
+      const endDate = new Date(startDate.getTime() + durationDays * 24 * 60 * 60 * 1000);
+
+      const { error } = await supabase
+        .from("sponsorships")
+        .update({
+          status: "approved",
+          payment_status: "completed",
+          start_date: startDate.toISOString(),
+          end_date: endDate.toISOString(),
+        })
+        .eq("id", sponsorship.id);
+
+      if (error) throw error;
+
+      toast.success(
+        `Restored! "${sponsorship.business_name}" is now Active and live until ${endDate.toLocaleDateString()}.`
+      );
+      fetchSponsorships();
+    } catch (error: any) {
+      console.error("Error restoring sponsorship:", error);
+      toast.error(error.message || "Failed to restore sponsorship");
+    }
+  };
+
   const handleReject = async (id: string, businessName: string) => {
     try {
       const { error } = await supabase
@@ -264,6 +328,104 @@ const AdminSponsorships = () => {
     }
   };
 
+  // Delete sponsorship with confirmation
+  const handleConfirmDelete = async () => {
+    if (!deletingSponsorship) return;
+    setIsDeleting(true);
+    try {
+      const { error } = await supabase
+        .from("sponsorships")
+        .delete()
+        .eq("id", deletingSponsorship.id);
+
+      if (error) throw error;
+
+      toast.success(`Sponsorship for "${deletingSponsorship.business_name}" deleted`);
+      setDeletingSponsorship(null);
+      fetchSponsorships();
+    } catch (error: any) {
+      console.error("Error deleting sponsorship:", error);
+      toast.error(error.message || "Failed to delete sponsorship");
+    } finally {
+      setIsDeleting(false);
+    }
+  };
+
+  // Open Edit Sponsorship Dialog
+  const handleOpenEditSponsorship = (sponsorship: Sponsorship) => {
+    setEditingSponsorship(sponsorship);
+    setEditForm({
+      id: sponsorship.id,
+      businessName: sponsorship.business_name || "",
+      contactPerson: sponsorship.contact_person || "",
+      email: sponsorship.email || "",
+      phone: sponsorship.phone || "",
+      destinationUrl: sponsorship.destination_url || "",
+      duration: sponsorship.duration || 7,
+      price: sponsorship.price || 0,
+      status: sponsorship.status || "Pending payment",
+      startDate: sponsorship.start_date
+        ? new Date(sponsorship.start_date).toISOString().split("T")[0]
+        : "",
+      endDate: sponsorship.end_date
+        ? new Date(sponsorship.end_date).toISOString().split("T")[0]
+        : "",
+      bannerUrl: sponsorship.banner_url || "",
+    });
+    setIsEditSponsorshipOpen(true);
+  };
+
+  // Save Edited Sponsorship
+  const handleSaveEditSponsorship = async () => {
+    if (!editForm.businessName.trim()) {
+      toast.error("Business name is required");
+      return;
+    }
+    if (!editForm.bannerUrl) {
+      toast.error("Banner image is required");
+      return;
+    }
+
+    setIsSavingEdit(true);
+    try {
+      const updatePayload: any = {
+        business_name: editForm.businessName.trim(),
+        contact_person: editForm.contactPerson.trim(),
+        email: editForm.email.trim(),
+        phone: editForm.phone.trim(),
+        destination_url: editForm.destinationUrl.trim(),
+        duration: Number(editForm.duration),
+        price: Number(editForm.price),
+        status: editForm.status,
+        banner_url: editForm.bannerUrl,
+        updated_at: new Date().toISOString(),
+      };
+
+      if (editForm.startDate) {
+        updatePayload.start_date = new Date(editForm.startDate).toISOString();
+      }
+      if (editForm.endDate) {
+        updatePayload.end_date = new Date(editForm.endDate).toISOString();
+      }
+
+      const { error } = await supabase
+        .from("sponsorships")
+        .update(updatePayload)
+        .eq("id", editForm.id);
+
+      if (error) throw error;
+
+      toast.success("Sponsorship updated successfully");
+      setIsEditSponsorshipOpen(false);
+      fetchSponsorships();
+    } catch (error: any) {
+      console.error("Error updating sponsorship:", error);
+      toast.error(error.message || "Failed to update sponsorship");
+    } finally {
+      setIsSavingEdit(false);
+    }
+  };
+
   const handleFileUpload = async (id: string, url: string, column: "banner_url" | "payment_proof") => {
     if (!url) return;
     try {
@@ -284,12 +446,10 @@ const AdminSponsorships = () => {
   // Toggle plan active / paused
   const handleTogglePlanActive = async (plan: SponsorshipPlan) => {
     const nextState = !plan.is_active;
-    // Optimistic update
     setPlans((prev) => prev.map((p) => (p.id === plan.id ? { ...p, is_active: nextState } : p)));
 
     try {
       if (plan.id.startsWith("default-")) {
-        // If plan is from default memory (table wasn't seeded yet), insert into DB
         const { error } = await supabase.from("sponsorship_plans").upsert({
           name: plan.name,
           duration: plan.duration,
@@ -359,7 +519,6 @@ const AdminSponsorships = () => {
     setIsSavingPlan(true);
     try {
       if (editingPlan && !editingPlan.id.startsWith("default-")) {
-        // Update existing DB plan
         const { error } = await supabase
           .from("sponsorship_plans")
           .update({
@@ -375,7 +534,6 @@ const AdminSponsorships = () => {
         if (error) throw error;
         toast.success(`Plan "${planForm.name}" updated successfully`);
       } else {
-        // Create new plan
         const { error } = await supabase.from("sponsorship_plans").insert({
           name: planForm.name.trim(),
           duration: Number(planForm.duration),
@@ -494,7 +652,7 @@ const AdminSponsorships = () => {
       return (
         <Badge className="bg-emerald-500/15 text-emerald-700 dark:text-emerald-400 border border-emerald-500/30 gap-1 font-semibold">
           <CheckCircle className="w-3.5 h-3.5" />
-          Approved
+          Active (Live)
         </Badge>
       );
     }
@@ -514,6 +672,33 @@ const AdminSponsorships = () => {
     );
   };
 
+  // Reusable Edit & Delete buttons header on every sponsorship card
+  const renderCardHeaderActions = (sponsorship: Sponsorship) => (
+    <div className="flex items-center gap-1.5">
+      <Button
+        variant="outline"
+        size="sm"
+        className="h-8 px-2.5 text-xs gap-1"
+        onClick={() => handleOpenEditSponsorship(sponsorship)}
+        title="Edit sponsorship"
+      >
+        <Edit2 className="w-3.5 h-3.5" />
+        Edit
+      </Button>
+
+      <Button
+        variant="ghost"
+        size="sm"
+        className="h-8 px-2.5 text-xs text-destructive hover:text-destructive hover:bg-destructive/10 gap-1"
+        onClick={() => setDeletingSponsorship(sponsorship)}
+        title="Delete sponsorship"
+      >
+        <Trash2 className="w-3.5 h-3.5" />
+        Delete
+      </Button>
+    </div>
+  );
+
   if (authLoading || loading || !isAdmin) {
     return (
       <AdminLayout>
@@ -532,7 +717,7 @@ const AdminSponsorships = () => {
           <div>
             <h1 className="text-3xl font-bold text-foreground">Sponsorship Management</h1>
             <p className="text-muted-foreground mt-1">
-              Review applications, approve sponsorships to make them live, and manage pricing plans
+              Review applications, approve sponsorships to make them live, edit or delete sponsorships, and manage plans
             </p>
           </div>
 
@@ -667,7 +852,7 @@ const AdminSponsorships = () => {
             </TabsTrigger>
             <TabsTrigger value="approved" className="flex items-center gap-2 py-2">
               <CheckCircle className="w-4 h-4 text-emerald-500" />
-              <span>Approved (Live)</span>
+              <span>Active (Live)</span>
               <Badge variant="secondary" className="ml-1 text-xs">
                 {approvedList.length}
               </Badge>
@@ -734,7 +919,10 @@ const AdminSponsorships = () => {
                             Contact: {sponsorship.contact_person}
                           </p>
                         </div>
-                        {getStatusBadge(sponsorship.status)}
+                        <div className="flex items-center gap-3">
+                          {getStatusBadge(sponsorship.status)}
+                          {renderCardHeaderActions(sponsorship)}
+                        </div>
                       </div>
                     </CardHeader>
 
@@ -776,7 +964,7 @@ const AdminSponsorships = () => {
                           </div>
 
                           {/* Action Buttons */}
-                          <div className="pt-2 flex flex-col sm:flex-row gap-3">
+                          <div className="pt-2 flex flex-col sm:flex-row gap-2.5">
                             <Button
                               className="flex-1 bg-emerald-600 hover:bg-emerald-700 text-white font-bold h-11"
                               onClick={() => handleApprove(sponsorship)}
@@ -868,7 +1056,10 @@ const AdminSponsorships = () => {
                             {sponsorship.contact_person}
                           </p>
                         </div>
-                        {getStatusBadge(sponsorship.status)}
+                        <div className="flex items-center gap-3">
+                          {getStatusBadge(sponsorship.status)}
+                          {renderCardHeaderActions(sponsorship)}
+                        </div>
                       </div>
                     </CardHeader>
                     <CardContent>
@@ -897,7 +1088,7 @@ const AdminSponsorships = () => {
                             </span>
                           </div>
 
-                          <div className="pt-2 flex gap-3">
+                          <div className="pt-2 flex flex-wrap gap-2.5">
                             <Button
                               variant="outline"
                               onClick={() => handleMarkExpired(sponsorship.id)}
@@ -953,7 +1144,7 @@ const AdminSponsorships = () => {
             ) : (
               <div className="grid gap-6">
                 {rejectedList.map((sponsorship) => (
-                  <Card key={sponsorship.id} className="opacity-80">
+                  <Card key={sponsorship.id} className="opacity-90">
                     <CardHeader className="pb-3">
                       <div className="flex items-start justify-between">
                         <div>
@@ -963,18 +1154,23 @@ const AdminSponsorships = () => {
                             {sponsorship.contact_person}
                           </p>
                         </div>
-                        {getStatusBadge(sponsorship.status)}
+                        <div className="flex items-center gap-3">
+                          {getStatusBadge(sponsorship.status)}
+                          {renderCardHeaderActions(sponsorship)}
+                        </div>
                       </div>
                     </CardHeader>
-                    <CardContent className="flex justify-between items-center">
+                    <CardContent className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-3">
                       <div className="text-sm text-muted-foreground">
                         {sponsorship.duration} Days (₹{sponsorship.price}) • {sponsorship.phone}
                       </div>
                       <Button
                         size="sm"
                         variant="outline"
+                        className="bg-emerald-50 text-emerald-700 hover:bg-emerald-100 border-emerald-300"
                         onClick={() => handleApprove(sponsorship)}
                       >
+                        <CheckCircle className="w-3.5 h-3.5 mr-1 text-emerald-600" />
                         Re-Approve & Make Live
                       </Button>
                     </CardContent>
@@ -984,7 +1180,7 @@ const AdminSponsorships = () => {
             )}
           </TabsContent>
 
-          {/* TAB 4: EXPIRED */}
+          {/* TAB 4: EXPIRED (Includes Restore button that sets new start date of today & end date from duration) */}
           <TabsContent value="expired" className="space-y-4">
             {expiredList.length === 0 ? (
               <Card>
@@ -1001,23 +1197,30 @@ const AdminSponsorships = () => {
                         <div>
                           <CardTitle className="text-lg">{sponsorship.business_name}</CardTitle>
                           <p className="text-xs text-muted-foreground">
-                            ID: {sponsorship.application_id || sponsorship.id.slice(0, 8)}
+                            ID: {sponsorship.application_id || sponsorship.id.slice(0, 8)} • Contact:{" "}
+                            {sponsorship.contact_person}
                           </p>
                         </div>
-                        {getStatusBadge(sponsorship.status)}
+                        <div className="flex items-center gap-3">
+                          {getStatusBadge(sponsorship.status)}
+                          {renderCardHeaderActions(sponsorship)}
+                        </div>
                       </div>
                     </CardHeader>
-                    <CardContent className="flex justify-between items-center">
+                    <CardContent className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
                       <div className="text-sm text-muted-foreground">
                         Ran from {sponsorship.start_date ? new Date(sponsorship.start_date).toLocaleDateString() : "—"} to{" "}
-                        {sponsorship.end_date ? new Date(sponsorship.end_date).toLocaleDateString() : "—"} • Total Clicks: {sponsorship.clicks}
+                        {sponsorship.end_date ? new Date(sponsorship.end_date).toLocaleDateString() : "—"} • Duration: {sponsorship.duration} Days • Clicks: {sponsorship.clicks}
                       </div>
+                      
+                      {/* Restore Button */}
                       <Button
-                        size="sm"
-                        variant="outline"
-                        onClick={() => handleApprove(sponsorship)}
+                        size="default"
+                        className="bg-emerald-600 hover:bg-emerald-700 text-white font-semibold gap-1.5 shrink-0 shadow-xs"
+                        onClick={() => handleRestore(sponsorship)}
                       >
-                        Re-Activate (Renew)
+                        <RefreshCw className="w-4 h-4" />
+                        Restore (Make Live)
                       </Button>
                     </CardContent>
                   </Card>
@@ -1117,6 +1320,181 @@ const AdminSponsorships = () => {
             )}
           </TabsContent>
         </Tabs>
+
+        {/* Delete Confirmation Alert Dialog */}
+        <AlertDialog
+          open={!!deletingSponsorship}
+          onOpenChange={(open) => !open && setDeletingSponsorship(null)}
+        >
+          <AlertDialogContent>
+            <AlertDialogHeader>
+              <AlertDialogTitle>Delete Sponsorship?</AlertDialogTitle>
+              <AlertDialogDescription>
+                Are you sure you want to delete the sponsorship for{" "}
+                <strong>"{deletingSponsorship?.business_name}"</strong>? This will permanently
+                remove it from the database and take down its active banner. This action cannot be
+                undone.
+              </AlertDialogDescription>
+            </AlertDialogHeader>
+            <AlertDialogFooter>
+              <AlertDialogCancel disabled={isDeleting}>Cancel</AlertDialogCancel>
+              <AlertDialogAction
+                onClick={handleConfirmDelete}
+                disabled={isDeleting}
+                className="bg-destructive hover:bg-destructive/90 text-destructive-foreground font-semibold"
+              >
+                {isDeleting ? <Loader2 className="w-4 h-4 animate-spin mr-2" /> : "Delete Sponsorship"}
+              </AlertDialogAction>
+            </AlertDialogFooter>
+          </AlertDialogContent>
+        </AlertDialog>
+
+        {/* Edit Sponsorship Dialog */}
+        <Dialog open={isEditSponsorshipOpen} onOpenChange={setIsEditSponsorshipOpen}>
+          <DialogContent className="sm:max-w-[650px] max-h-[90vh] overflow-y-auto">
+            <DialogHeader>
+              <DialogTitle>Edit Sponsorship</DialogTitle>
+              <DialogDescription>
+                Update business details, duration, pricing, banner, or active dates
+              </DialogDescription>
+            </DialogHeader>
+
+            <div className="space-y-4 py-4">
+              <div className="grid md:grid-cols-2 gap-4">
+                <div className="space-y-2">
+                  <Label htmlFor="editBusinessName">Business Name *</Label>
+                  <Input
+                    id="editBusinessName"
+                    value={editForm.businessName}
+                    onChange={(e) => setEditForm({ ...editForm, businessName: e.target.value })}
+                  />
+                </div>
+                <div className="space-y-2">
+                  <Label htmlFor="editContactPerson">Contact Person</Label>
+                  <Input
+                    id="editContactPerson"
+                    value={editForm.contactPerson}
+                    onChange={(e) => setEditForm({ ...editForm, contactPerson: e.target.value })}
+                  />
+                </div>
+                <div className="space-y-2">
+                  <Label htmlFor="editEmail">Email</Label>
+                  <Input
+                    id="editEmail"
+                    type="email"
+                    value={editForm.email}
+                    onChange={(e) => setEditForm({ ...editForm, email: e.target.value })}
+                  />
+                </div>
+                <div className="space-y-2">
+                  <Label htmlFor="editPhone">Phone</Label>
+                  <Input
+                    id="editPhone"
+                    value={editForm.phone}
+                    onChange={(e) => setEditForm({ ...editForm, phone: e.target.value })}
+                  />
+                </div>
+                <div className="space-y-2 md:col-span-2">
+                  <Label htmlFor="editDestinationUrl">Destination URL *</Label>
+                  <Input
+                    id="editDestinationUrl"
+                    value={editForm.destinationUrl}
+                    onChange={(e) => setEditForm({ ...editForm, destinationUrl: e.target.value })}
+                  />
+                </div>
+                <div className="space-y-2">
+                  <Label htmlFor="editDuration">Duration (Days) *</Label>
+                  <Input
+                    id="editDuration"
+                    type="number"
+                    min={1}
+                    value={editForm.duration}
+                    onChange={(e) => setEditForm({ ...editForm, duration: parseInt(e.target.value) || 0 })}
+                  />
+                </div>
+                <div className="space-y-2">
+                  <Label htmlFor="editPrice">Price (₹) *</Label>
+                  <Input
+                    id="editPrice"
+                    type="number"
+                    min={0}
+                    value={editForm.price}
+                    onChange={(e) => setEditForm({ ...editForm, price: parseFloat(e.target.value) || 0 })}
+                  />
+                </div>
+                <div className="space-y-2 md:col-span-2">
+                  <Label htmlFor="editStatus">Status</Label>
+                  <Select
+                    value={editForm.status}
+                    onValueChange={(val) => setEditForm({ ...editForm, status: val })}
+                  >
+                    <SelectTrigger id="editStatus">
+                      <SelectValue placeholder="Select status" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="Pending payment">Pending payment</SelectItem>
+                      <SelectItem value="approved">Approved (Active/Live)</SelectItem>
+                      <SelectItem value="rejected">Rejected</SelectItem>
+                      <SelectItem value="expired">Expired</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
+                <div className="space-y-2">
+                  <Label htmlFor="editStartDate">Start Date (Live from)</Label>
+                  <Input
+                    id="editStartDate"
+                    type="date"
+                    value={editForm.startDate}
+                    onChange={(e) => setEditForm({ ...editForm, startDate: e.target.value })}
+                  />
+                </div>
+                <div className="space-y-2">
+                  <Label htmlFor="editEndDate">End Date (Live until)</Label>
+                  <Input
+                    id="editEndDate"
+                    type="date"
+                    value={editForm.endDate}
+                    onChange={(e) => setEditForm({ ...editForm, endDate: e.target.value })}
+                  />
+                </div>
+              </div>
+
+              {/* Banner Image */}
+              <div className="space-y-2 pt-2 border-t">
+                <Label>Ad Banner (16:9, 1280 × 720 px)</Label>
+                {editForm.bannerUrl && (
+                  <img
+                    src={editForm.bannerUrl}
+                    alt="Current banner"
+                    className="w-full aspect-[16/9] object-cover rounded-lg border mb-2"
+                  />
+                )}
+                <ImageUpload
+                  bucket="sponsorship-banners"
+                  onUploadComplete={(url) => setEditForm({ ...editForm, bannerUrl: url })}
+                  label="Upload New Banner"
+                  aspectRatio={16 / 9}
+                  targetWidth={1280}
+                  targetHeight={720}
+                  recommendedSize="Recommended: 1280 × 720 px"
+                />
+              </div>
+            </div>
+
+            <DialogFooter>
+              <Button
+                variant="outline"
+                onClick={() => setIsEditSponsorshipOpen(false)}
+                disabled={isSavingEdit}
+              >
+                Cancel
+              </Button>
+              <Button onClick={handleSaveEditSponsorship} disabled={isSavingEdit}>
+                {isSavingEdit ? <Loader2 className="w-4 h-4 animate-spin mr-2" /> : "Save Changes"}
+              </Button>
+            </DialogFooter>
+          </DialogContent>
+        </Dialog>
 
         {/* Custom Dates Approval Dialog */}
         <Dialog open={customDatesOpen} onOpenChange={setCustomDatesOpen}>
