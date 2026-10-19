@@ -28,8 +28,8 @@ const Hero = () => {
           alt="Hero Background"
           className="w-full h-full object-cover object-[70%_center] md:object-center"
         />
-        {/* Soft white gradient overlay: hidden on mobile, active on desktop only */}
-        <div className="hidden md:block absolute inset-y-0 left-0 w-[60%] bg-gradient-to-r from-white via-white/80 to-transparent pointer-events-none" />
+        {/* Soft white gradient overlay: hidden on mobile, active on desktop only (45% white at far left, fading to transparent by 40% width) */}
+        <div className="hidden md:block absolute inset-y-0 left-0 w-[40%] bg-gradient-to-r from-white/45 to-transparent pointer-events-none" />
       </div>
 
       {/* Content */}
