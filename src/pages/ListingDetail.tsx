@@ -9,6 +9,8 @@ import { MapPin, Phone, Mail, Calendar, ArrowLeft, Star, MessageCircle, ChevronL
 import { toast } from "sonner";
 import { supabase } from "@/integrations/supabase/client";
 import { formatListingPrice } from "@/lib/priceUtils";
+import { ShareListingButton } from "@/components/ShareListingButton";
+import { FavoriteButton } from "@/components/FavoriteButton";
 
 import { useAuth } from "@/hooks/useAuth";
 
@@ -35,15 +37,22 @@ const ListingDetail = () => {
         return;
       }
 
-      const { data, error } = await supabase
+      const isUuid = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(id);
+      let query = supabase
         .from("listings")
         .select(`
           *,
           categories(name, slug),
           listing_images(image_url, display_order)
-        `)
-        .eq("id", id)
-        .single();
+        `);
+
+      if (isUuid) {
+        query = query.eq("id", id);
+      } else {
+        query = query.eq("listing_id", id);
+      }
+
+      const { data, error } = await query.maybeSingle();
 
       if (error || !data) {
         toast.error("Listing not found");
@@ -64,7 +73,7 @@ const ListingDetail = () => {
       const formattedListing = {
         ...data,
         images: data.listing_images
-          ?.sort((a: any, b: any) => a.display_order - b.display_order)
+          ?.sort((a: any, b: any) => (a.display_order ?? 0) - (b.display_order ?? 0))
           .map((img: any) => img.image_url) || [],
         category: data.categories?.name,
         location: `${data.location_city}${data.location_locality ? ', ' + data.location_locality : ''}`,
@@ -90,6 +99,41 @@ const ListingDetail = () => {
     fetchListing();
   }, [id, user, isAdmin, navigate]);
 
+  // Sync client-side meta tags and page title
+  useEffect(() => {
+    if (!listing) return;
+
+    const pageTitle = `${listing.title} - ${listing.price} | The Property For You`;
+    document.title = pageTitle;
+
+    const setMetaTag = (attr: string, key: string, content: string) => {
+      let tag = document.querySelector(`meta[${attr}="${key}"]`);
+      if (!tag) {
+        tag = document.createElement("meta");
+        tag.setAttribute(attr, key);
+        document.head.appendChild(tag);
+      }
+      tag.setAttribute("content", content);
+    };
+
+    const firstImg = listing.images?.[0] || "https://thepropertyforyou.com/Asset%203.png";
+    const loc = listing.location || "";
+    const cleanDesc = listing.description ? listing.description.replace(/[\r\n]+/g, " ").slice(0, 150) : "";
+    const desc = `${listing.price} • ${loc}${cleanDesc ? ` — ${cleanDesc}` : ""}`;
+    const canonical = `${window.location.origin}/listing/${listing.id}`;
+
+    setMetaTag("name", "description", desc);
+    setMetaTag("property", "og:title", pageTitle);
+    setMetaTag("property", "og:description", desc);
+    setMetaTag("property", "og:image", firstImg);
+    setMetaTag("property", "og:image:secure_url", firstImg);
+    setMetaTag("property", "og:url", canonical);
+    setMetaTag("property", "og:type", "article");
+    setMetaTag("name", "twitter:title", pageTitle);
+    setMetaTag("name", "twitter:description", desc);
+    setMetaTag("name", "twitter:image", firstImg);
+  }, [listing]);
+
   if (!listing) {
     return (
       <div className="min-h-screen bg-background">
@@ -105,14 +149,25 @@ const ListingDetail = () => {
     <div className="min-h-screen bg-background">
       <Header />
       <main className="container mx-auto px-4 py-8">
-        <Button
-          variant="ghost"
-          onClick={() => navigate("/")}
-          className="mb-6"
-        >
-          <ArrowLeft className="h-4 w-4 mr-2" />
-          Back to Listings
-        </Button>
+        <div className="flex items-center justify-between gap-4 mb-6">
+          <Button
+            variant="ghost"
+            onClick={() => navigate(-1)}
+          >
+            <ArrowLeft className="h-4 w-4 mr-2" />
+            Back to Listings
+          </Button>
+
+          <div className="flex items-center gap-2">
+            <ShareListingButton
+              listing={listing}
+              showLabel={true}
+              variant="outline"
+              className="rounded-full shadow-xs gap-1.5"
+            />
+            <FavoriteButton listingId={listing.id} className="!static !top-auto !right-auto" />
+          </div>
+        </div>
 
         <div className="grid lg:grid-cols-3 gap-8">
           {/* Main Content */}
@@ -398,6 +453,16 @@ const ListingDetail = () => {
                       </Button>
                     </a>
                   )}
+
+                  <div className="pt-1">
+                    <ShareListingButton
+                      listing={listing}
+                      showLabel={true}
+                      variant="outline"
+                      fullWidth
+                      className="rounded-full h-10 gap-2 font-medium"
+                    />
+                  </div>
                 </div>
 
                 <div className="pt-6 border-t space-y-3">

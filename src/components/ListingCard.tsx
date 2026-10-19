@@ -5,6 +5,7 @@ import { Badge } from "@/components/ui/badge";
 import { MapPin, ChevronLeft, ChevronRight } from "lucide-react";
 import { FavoriteButton } from "@/components/FavoriteButton";
 import { formatListingPrice } from "@/lib/priceUtils";
+import { ShareListingButton } from "@/components/ShareListingButton";
 
 interface ListingCardProps {
   listing: {
@@ -18,6 +19,8 @@ interface ListingCardProps {
     listing_images?: { image_url: string; display_order?: number }[];
     categories?: { name: string };
     attributes?: any;
+    listing_id?: string | null;
+    description?: string | null;
   };
 }
 
@@ -99,7 +102,7 @@ export const ListingCard = ({ listing }: ListingCardProps) => {
                 </div>
 
                 {/* Image counter badge */}
-                <div className="absolute top-2 right-12 z-20 bg-black/60 text-white text-[10px] font-semibold px-2 py-0.5 rounded-full backdrop-blur-sm pointer-events-none">
+                <div className="absolute bottom-2.5 right-2.5 z-20 bg-black/60 text-white text-[10px] font-semibold px-2 py-0.5 rounded-full backdrop-blur-sm pointer-events-none">
                   {currentImageIndex + 1}/{images.length}
                 </div>
               </>
@@ -119,8 +122,9 @@ export const ListingCard = ({ listing }: ListingCardProps) => {
           )}
         </div>
 
-        <div className="absolute top-2 right-2 z-20">
-          <FavoriteButton listingId={listing.id} />
+        <div className="absolute top-2 right-2 z-20 flex items-center gap-1.5">
+          <ShareListingButton listing={listing} />
+          <FavoriteButton listingId={listing.id} className="!static !top-auto !right-auto" />
         </div>
       </div>
       
