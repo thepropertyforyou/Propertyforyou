@@ -14,6 +14,7 @@ import { statesAndDistricts } from "@/data/india-locations";
 import { ListingCard } from "@/components/ListingCard";
 import SponsoredAdsSidebar from "@/components/SponsoredAdsSidebar";
 import { parsePriceToNumber } from "@/lib/priceUtils";
+import { searchListings } from "@/utils/propertySearch";
 import {
   Pagination,
   PaginationContent,
@@ -34,69 +35,9 @@ interface Listing {
   listing_id?: string | null;
   attributes: any;
   created_at: string;
-  listing_images: { image_url: string }[];
+  listing_images: { image_url: string; display_order?: number }[];
   categories?: { name: string } | null;
 }
-
-const normalizeSearchText = (text: any): string => {
-  if (text === null || text === undefined) return "";
-  return String(text)
-    .toLowerCase()
-    .replace(/\s+/g, " ")
-    .trim();
-};
-
-const getListingSearchStrings = (listing: Listing): string[] => {
-  const parts: string[] = [];
-
-  // Title & description
-  if (listing.title) parts.push(listing.title);
-  if (listing.description) parts.push(listing.description);
-
-  // Listing ID
-  if (listing.listing_id) parts.push(listing.listing_id);
-  if (listing.id) parts.push(listing.id);
-
-  // Locations: city/district & locality/taluk
-  if (listing.location_city) parts.push(listing.location_city);
-  if (listing.location_locality) parts.push(listing.location_locality);
-
-  // Attributes locations
-  if (listing.attributes?.state) parts.push(listing.attributes.state);
-  if (listing.attributes?.district) parts.push(listing.attributes.district);
-  if (listing.attributes?.taluk) parts.push(listing.attributes.taluk);
-  if (listing.attributes?.city) parts.push(listing.attributes.city);
-  if (listing.attributes?.locality) parts.push(listing.attributes.locality);
-  if (listing.attributes?.address) parts.push(listing.attributes.address);
-
-  // Derive state from statesAndDistricts based on district or taluk
-  const cityNorm = normalizeSearchText(listing.location_city);
-  const localityNorm = normalizeSearchText(listing.location_locality);
-  for (const item of statesAndDistricts) {
-    const hasDist = item.districts.some((d) => {
-      const dNorm = normalizeSearchText(d.name);
-      if (dNorm && cityNorm && (dNorm === cityNorm || cityNorm.includes(dNorm) || dNorm.includes(cityNorm))) {
-        return true;
-      }
-      if (localityNorm && d.taluks.some((t) => normalizeSearchText(t) === localityNorm)) {
-        return true;
-      }
-      return false;
-    });
-    if (hasDist) {
-      parts.push(item.state);
-      break;
-    }
-  }
-
-  // Property types & categories
-  if (listing.attributes?.propertyType) parts.push(listing.attributes.propertyType);
-  if (listing.attributes?.subCategory) parts.push(listing.attributes.subCategory);
-  if (listing.attributes?.type) parts.push(listing.attributes.type);
-  if (listing.categories?.name) parts.push(listing.categories.name);
-
-  return parts;
-};
 
 const ITEMS_PER_PAGE = 12;
 
@@ -106,6 +47,7 @@ const Properties = () => {
   const [searchParams, setSearchParams] = useSearchParams();
   const [listings, setListings] = useState<Listing[]>([]);
   const [filteredListings, setFilteredListings] = useState<Listing[]>([]);
+  const [similarListings, setSimilarListings] = useState<Listing[]>([]);
   const [loading, setLoading] = useState(true);
   const [currentPage, setCurrentPage] = useState(1);
   const [sortBy, setSortBy] = useState("newest");
@@ -180,6 +122,25 @@ const Properties = () => {
     }
   };
 
+  const sortListings = (list: Listing[], sortKey: string) => {
+    return [...list].sort((a, b) => {
+      if (a.is_featured && !b.is_featured) return -1;
+      if (!a.is_featured && b.is_featured) return 1;
+
+      switch (sortKey) {
+        case "price-low":
+          return a.price - b.price;
+        case "price-high":
+          return b.price - a.price;
+        case "oldest":
+          return new Date(a.created_at).getTime() - new Date(b.created_at).getTime();
+        case "newest":
+        default:
+          return new Date(b.created_at).getTime() - new Date(a.created_at).getTime();
+      }
+    });
+  };
+
   const applyFiltersAndSort = () => {
     let filtered = [...listings];
 
@@ -188,39 +149,6 @@ const Properties = () => {
         (listing) => 
           listing.attributes?.subCategory?.toLowerCase() === subCategory.toLowerCase()
       );
-    }
-
-    if (filters.search) {
-      const cleanQuery = normalizeSearchText(filters.search);
-      if (cleanQuery) {
-        const queryWords = cleanQuery.split(" ").filter(Boolean);
-        const strippedQuery = cleanQuery.replace(/[-\s]/g, "");
-
-        filtered = filtered.filter((listing) => {
-          const searchableParts = getListingSearchStrings(listing);
-          const normalizedParts = searchableParts.map(normalizeSearchText);
-          const combined = normalizedParts.join(" ");
-
-          // 1. Direct match on combined text or individual parts
-          if (combined.includes(cleanQuery)) return true;
-          if (normalizedParts.some((part) => part.includes(cleanQuery))) return true;
-
-          // 2. Listing ID matching ignoring dashes and extra spaces (e.g. LST-0001 vs lst 0001)
-          if (listing.listing_id) {
-            const strippedId = normalizeSearchText(listing.listing_id).replace(/[-\s]/g, "");
-            if (strippedId && strippedQuery && (strippedId.includes(strippedQuery) || strippedQuery.includes(strippedId))) {
-              return true;
-            }
-          }
-
-          // 3. Multi-word search where all individual query terms are present in the listing's searchable text
-          if (queryWords.length > 1 && queryWords.every((word) => combined.includes(word))) {
-            return true;
-          }
-
-          return false;
-        });
-      }
     }
 
     if (filters.state && filters.state !== "all") {
@@ -274,24 +202,20 @@ const Properties = () => {
       filtered = filtered.filter((listing) => listing.is_featured);
     }
 
-    filtered.sort((a, b) => {
-      if (a.is_featured && !b.is_featured) return -1;
-      if (!a.is_featured && b.is_featured) return 1;
+    let exactResults: Listing[] = [];
+    let similarResults: Listing[] = [];
 
-      switch (sortBy) {
-        case "price-low":
-          return a.price - b.price;
-        case "price-high":
-          return b.price - a.price;
-        case "oldest":
-          return new Date(a.created_at).getTime() - new Date(b.created_at).getTime();
-        case "newest":
-        default:
-          return new Date(b.created_at).getTime() - new Date(a.created_at).getTime();
-      }
-    });
+    if (filters.search && filters.search.trim()) {
+      const searchResult = searchListings(filtered, filters.search);
+      exactResults = searchResult.exactMatches;
+      similarResults = searchResult.similarMatches;
+    } else {
+      exactResults = filtered;
+      similarResults = [];
+    }
 
-    setFilteredListings(filtered);
+    setFilteredListings(sortListings(exactResults, sortBy));
+    setSimilarListings(sortListings(similarResults, sortBy));
     setCurrentPage(1);
   };
 
@@ -334,6 +258,7 @@ const Properties = () => {
       bedrooms: "",
       featuredOnly: false,
     });
+    setSimilarListings([]);
     setSearchParams({}, { replace: true });
   };
 
@@ -416,55 +341,96 @@ const Properties = () => {
             <ListingSort value={sortBy} onChange={setSortBy} />
 
             {loading ? (
-          <div className="text-center py-12">
-            <p className="text-muted-foreground">Loading properties...</p>
-          </div>
-            ) : currentListings.length === 0 ? (
+              <div className="text-center py-12">
+                <p className="text-muted-foreground">Loading properties...</p>
+              </div>
+            ) : currentListings.length === 0 && similarListings.length === 0 ? (
               <div className="text-center py-12">
                 <p className="text-muted-foreground text-lg">No properties found</p>
+                {filters.search && (
+                  <p className="text-sm text-muted-foreground mt-1">
+                    No properties matched or were similar to "{filters.search}".
+                  </p>
+                )}
               </div>
             ) : (
               <>
-                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4 sm:gap-6">
-                  {currentListings.map((listing) => (
-                    <ListingCard key={listing.id} listing={listing} />
-                  ))}
-                </div>
-
-                {totalPages > 1 && (
-                  <Pagination className="mt-8">
-                    <PaginationContent>
-                      <PaginationItem>
-                        <PaginationPrevious
-                          onClick={() => setCurrentPage((p) => Math.max(1, p - 1))}
-                          className={
-                            currentPage === 1 ? "pointer-events-none opacity-50" : "cursor-pointer"
-                          }
-                        />
-                      </PaginationItem>
-                      {[...Array(totalPages)].map((_, i) => (
-                        <PaginationItem key={i + 1}>
-                          <PaginationLink
-                            onClick={() => setCurrentPage(i + 1)}
-                            isActive={currentPage === i + 1}
-                            className="cursor-pointer"
-                          >
-                            {i + 1}
-                          </PaginationLink>
-                        </PaginationItem>
+                {/* When exact matches exist */}
+                {currentListings.length > 0 && (
+                  <>
+                    <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4 sm:gap-6">
+                      {currentListings.map((listing) => (
+                        <ListingCard key={listing.id} listing={listing} />
                       ))}
-                      <PaginationItem>
-                        <PaginationNext
-                          onClick={() => setCurrentPage((p) => Math.min(totalPages, p + 1))}
-                          className={
-                            currentPage === totalPages
-                              ? "pointer-events-none opacity-50"
-                              : "cursor-pointer"
-                          }
-                        />
-                      </PaginationItem>
-                    </PaginationContent>
-                  </Pagination>
+                    </div>
+
+                    {totalPages > 1 && (
+                      <Pagination className="mt-8">
+                        <PaginationContent>
+                          <PaginationItem>
+                            <PaginationPrevious
+                              onClick={() => setCurrentPage((p) => Math.max(1, p - 1))}
+                              className={
+                                currentPage === 1 ? "pointer-events-none opacity-50" : "cursor-pointer"
+                              }
+                            />
+                          </PaginationItem>
+                          {[...Array(totalPages)].map((_, i) => (
+                            <PaginationItem key={i + 1}>
+                              <PaginationLink
+                                onClick={() => setCurrentPage(i + 1)}
+                                isActive={currentPage === i + 1}
+                                className="cursor-pointer"
+                              >
+                                {i + 1}
+                              </PaginationLink>
+                            </PaginationItem>
+                          ))}
+                          <PaginationItem>
+                            <PaginationNext
+                              onClick={() => setCurrentPage((p) => Math.min(totalPages, p + 1))}
+                              className={
+                                currentPage === totalPages
+                                  ? "pointer-events-none opacity-50"
+                                  : "cursor-pointer"
+                              }
+                            />
+                          </PaginationItem>
+                        </PaginationContent>
+                      </Pagination>
+                    )}
+                  </>
+                )}
+
+                {/* Notice when 0 exact matches exist, but similar results DO exist */}
+                {currentListings.length === 0 && similarListings.length > 0 && (
+                  <div className="bg-muted/40 rounded-lg p-4 border border-border/60 mb-2">
+                    <p className="text-sm text-muted-foreground">
+                      No exact matches found for "<span className="font-medium text-foreground">{filters.search}</span>". Showing similar results below:
+                    </p>
+                  </div>
+                )}
+
+                {/* Similar Results Section */}
+                {similarListings.length > 0 && (
+                  <div className={currentListings.length > 0 ? "mt-12 pt-8 border-t border-border" : "mt-2"}>
+                    <div className="flex items-center gap-2 mb-2">
+                      <h2 className="text-xl font-semibold text-foreground">Similar results</h2>
+                      <Badge variant="secondary" className="text-xs">
+                        {similarListings.length}
+                      </Badge>
+                    </div>
+                    {currentListings.length > 0 && (
+                      <p className="text-sm text-muted-foreground mb-6">
+                        Didn't find what you were looking for? Here are properties similar to your search:
+                      </p>
+                    )}
+                    <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4 sm:gap-6">
+                      {similarListings.map((listing) => (
+                        <ListingCard key={listing.id} listing={listing} />
+                      ))}
+                    </div>
+                  </div>
                 )}
               </>
             )}
